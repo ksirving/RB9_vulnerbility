@@ -31,3 +31,41 @@ head(delta)
 
 ## get delta h at each subbasin
 
+delta_long <- delta %>%
+  select(site, region, year, flow_metric, deltah_cur_ref_final, deltaH_watercon_ref_final) %>%
+  pivot_longer(deltah_cur_ref_final:deltaH_watercon_ref_final, names_to = "Scenario", values_to = "DeltaH")
+
+head(delta_long)
+
+delta_med <- delta_long %>%
+  group_by(site, region, flow_metric, Scenario) %>%
+  summarise(DeltaHMed = median(na.omit(DeltaH)))
+
+delta_med 
+
+
+# ASCI --------------------------------------------------------------------
+
+all_asci <- read.csv("input_data/01_h_asci_neg_pos_logR_metrics_figures_April2021.csv")
+head(all_asci)
+
+## scale probability
+all_asci <- all_asci %>%
+  select(-X) %>%
+  group_by(comb_code, Type) %>%
+  mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
+           (max(PredictedProbability)-min(PredictedProbability))) %>%
+  mutate(comb_code_type = paste(comb_code, "_", Type, sep="")) %>%
+  rename(Hydro_endpoint = hydro.endpoints)
+
+all_asci <- left_join(all_asci, labels, by ="Hydro_endpoint")
+
+
+## subset to only important metrics
+all_asci_sub <- subset(all_asci, hydro.endpoints %in% asci_metrics)
+
+unique(all_asci_sub$hydro.endpoints)
+
+
+
+

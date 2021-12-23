@@ -58,8 +58,6 @@ all_asci_sub <- subset(all_asci, hydro.endpoints %in% asci_metrics)
 unique(all_asci_sub$hydro.endpoints)
 
 
-
-
 # find roots of curve -----------------------------------------------------
 
 ## ASCI
