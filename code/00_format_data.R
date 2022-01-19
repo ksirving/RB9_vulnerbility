@@ -13,6 +13,16 @@ load("code/functions/root_interpolation_function.Rdata")
 ## upload and get delta h 
 
 
+## full names for labels
+labels <- read.csv("input_data/ffm_names.csv")
+labels <- labels[1:24, ]
+labels <- labels %>% rename(Hydro_endpoint = Flow.Metric.Code)
+labels[25, 1] <- "Magnitude of largest annual storm"
+labels[25, 2] <- "Q99"
+labels[25, 3] <- "Peak Flow"
+labels
+
+
 # CSCI --------------------------------------------------------------------
 
 
@@ -23,9 +33,9 @@ all_csci <- all_csci %>%
   group_by(comb_code, Type) %>%
   mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
            (max(PredictedProbability)-min(PredictedProbability))) %>%
-  mutate(comb_code_type = paste(comb_code, "_", Type, sep=""))
+  mutate(comb_code_type = paste(comb_code, "_", Type, sep="")) 
 
-all_csci <- left_join(all_csci, labels, by ="hydro.endpoints")
+all_csci <- left_join(all_csci, labels, by =c("hydro.endpoints" = "Hydro_endpoint"))
 
 head(all_csci)
 
@@ -49,11 +59,11 @@ all_asci <- all_asci %>%
            (max(PredictedProbability)-min(PredictedProbability))) %>%
   mutate(comb_code_type = paste(comb_code, "_", Type, sep=""))
 
-all_asci <- left_join(all_asci, labels, by ="hydro.endpoints")
+all_asci <- left_join(all_asci,  labels, by =c("hydro.endpoints" = "Hydro_endpoint"))
 
 
 ## subset to only important metrics
-all_asci_sub <- subset(all_asci, hydro.endpoints %in% asci_metrics)
+all_asci_sub <- subset(all_asci, hydro.endpoints %in% csci_metrics)
 
 unique(all_asci_sub$hydro.endpoints)
 
