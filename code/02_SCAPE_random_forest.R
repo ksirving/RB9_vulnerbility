@@ -17,3 +17,69 @@ asci <- read.csv("input_data/00_asci_delta_formatted_median_Nov2021.csv")
 asci
 
 
+csci <- read.csv("input_data/00_csci_delta_formatted_median_updated_Nov2021.csv")
+csci
+
+## work flow 
+## get COMIDs so can predict on NHD reach
+## get flow lines - may come with FMM data?
+
+
+
+
+# Quantile Random Forest --------------------------------------------------
+
+install.packages("quantregForest")
+library(quantregForest)
+
+set.seed(16)
+
+## format data
+
+## remove fall metrics as too many NAs
+head(csci)
+
+csci <- csci %>%
+  select(csci, DS_Dur_WS:DS_Tim, Q99:Wet_Tim)
+
+## remove observations with mising values
+csci <- csci[ !apply(is.na(csci), 1,any), ]
+csci
+dim(csci)
+
+## number of remining samples
+n <- nrow(csci)
+n
+
+## divide into training and test data
+indextrain <- sample(1:n,round(0.6*n),replace=FALSE)
+indextrain
+
+names(csci)
+
+Xtrain     <- csci[ indextrain,2:14]
+Xtest      <- csci[-indextrain,2:14]
+Ytrain     <- csci[ indextrain,1]
+Ytest      <- csci[-indextrain,1]
+
+
+qrf <- quantregForest(x=Xtrain, y=Ytrain)
+qrf
+qrf <- quantregForest(x=Xtrain, y=Ytrain, nodesize=10,sampsize=30)
+summary(qrf)
+
+conditionalQuantiles  <- predict(qrf, Xtest, what=c(0.1,0.5,0.9))
+conditionalQuantiles
+
+## class from Beck et al 2018
+# Class
+# Likely unconstrained Possibly unconstrained
+# Possibly constrained Likely constrained
+# Definition
+# Lower bound of prediction range is above threshold
+# Lower bound of prediction range is below threshold, but median prediction is above
+# Upper bound of prediction range is above threshold, but median prediction is below
+# Upper bound of prediction range is below threshold
+# Example
+# 10th percentile > 0.79
+# 50th percentile > 0.79 50th percentile < 0.79 90th percentile < 0.79

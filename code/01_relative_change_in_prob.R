@@ -34,29 +34,91 @@ limits <- left_join(limits, labels, by = "Hydro_endpoint")
 # SOC data (to change with RB9 data) --------------------------------------
 
 
-delta <- read.csv("/Volumes/Biology/San Juan WQIP_KTQ/Data/RawData/From_Geosyntec/South_OC_Flow_Ecology_for_SCCWRP/KTQ_flowalteration_assessment/00_Final_FFM_DeltaH_AH/SOC_deltaH_supp_final_12012021.csv")
+delta <- read.csv("input_data/2022-01-25_RFpred_output_alldata_SDCOMIDs.csv")
 head(delta)
+dim(delta)
+
+unique(delta$wayr)
+
+delta <- delta %>% distinct()
+
+# test <- delta %>%
+#   filter(comid == "20350539" )
 
 ## get delta h at each subbasin
 
 delta_long <- delta %>%
-  select(site, region, year, flow_metric, deltah_cur_ref_final, deltaH_watercon_ref_final) %>%
-  pivot_longer(deltah_cur_ref_final:deltaH_watercon_ref_final, names_to = "Scenario", values_to = "DeltaH")
+  # select(comid region, year, flow_metric, deltah_cur_ref_final, deltaH_watercon_ref_final) %>%
+  pivot_longer(d_ds_mag_50:d_wet_bfl_mag_50, names_to = "FlowMetric", values_to = "DeltaH")
 
 head(delta_long)
 
-# delta_med <- delta_long %>%
-#   group_by(site, region, flow_metric, Scenario) %>%
-#   summarise(DeltaHMed = median(na.omit(DeltaH)))
 
-delta_med 
+
+## split the time series into historical and current
+
+## historical = 1950-1982
+## current = 1983 - 2015
+
+## change metric names to match curve data
+## remove peak metrics
+
+
+unique(delta_long$FlowMetric)
+unique(all_asci$Hydro_endpoint)
+
+delta_long <- delta_long %>%
+  mutate(Scenario = ifelse(wayr %in% 1950:1982, "Historical", "Current")) %>%
+  mutate(hydro.endpoints = case_when(FlowMetric == "d_ds_mag_50" ~ "DS_Mag_50",
+                                     FlowMetric == "d_ds_mag_90" ~ "DS_Mag_90",
+                                     FlowMetric == "d_fa_mag" ~ "FA_Mag",
+                                     # FlowMetric == "d_peak_10" ~ "DS_Mag_50",
+                                     # FlowMetric == "d_peak_2" ~ "DS_Mag_50",
+                                     # FlowMetric == "d_peak_5" ~ "DS_Mag_50",
+                                     FlowMetric == "d_sp_mag" ~ "SP_Mag",
+                                     FlowMetric == "d_wet_bfl_mag_10" ~ "Wet_BFL_Mag_10",
+                                     FlowMetric == "d_wet_bfl_mag_50" ~ "Wet_BFL_Mag_50",)) %>%
+  filter(!FlowMetric %in% c("d_peak_10", "d_peak_2", "d_peak_5"))
+
+## add year id
+## define years to be assigned in scenrios
+wayr1 <- seq(1950, 1982, 1)
+wayr1
+
+wayr2 <- seq(1983, 2015, 1)
+wayr2
+
+## define ID sequence
+IDs <- seq(1, 33,1)
+IDs
+
+## join years in each scenario with IDs
+yearDF1 <- data.frame(wayr1, IDs)
+colnames(yearDF1)[1] <- "wayr"
+
+yearDF2 <- data.frame(wayr2, IDs)
+colnames(yearDF2)[1] <- "wayr"
+
+## combine scenario years
+yearDF <- bind_rows(yearDF1, yearDF2)
+yearDF
+## add back to DF
+delta_long <- left_join(delta_long, yearDF, by = "wayr")
+
+head(delta_long)
+sum(is.na(delta_long))
+
+RB9_metrics <- unique(delta_long$hydro.endpoints)
+RB9_metrics
+
+
+# test <- delta_long %>%
+#   filter(comid == "20350539",hydro.endpoints == "DS_Mag_50" )
 
 
 
 # ASCI Curve data --------------------------------------------------------------------
 
-
-metrics <-c("Q99", "SP_Tim","DS_Dur_WS")
 
 all_asci <- read.csv("input_data/01_h_asci_neg_pos_logR_metrics_figures_April2021.csv")
 head(all_asci)
@@ -74,7 +136,7 @@ all_asci <- left_join(all_asci, labels, by ="Hydro_endpoint")
 
 
 ## subset to only important metrics
-all_asci_sub <- subset(all_asci, Hydro_endpoint %in% metrics)
+# all_asci_sub <- subset(all_asci, Hydro_endpoint %in% metrics)
 
 
 # CSCI Curve data--------------------------------------------------------------------
@@ -96,10 +158,8 @@ all_csci <- left_join(all_csci, labels, by ="Hydro_endpoint")
 
 
 ## subset to only important metrics
-all_csci_sub <- subset(all_csci, Hydro_endpoint %in% metrics)
+# all_csci_sub <- subset(all_csci, Hydro_endpoint %in% metrics)
 
-
-unique(all_csci_sub$Hydro_endpoint)
 
 
 # delta H probability -----------------------------------------------------
@@ -109,9 +169,9 @@ unique(all_csci_sub$Hydro_endpoint)
 # ASCI Probability --------------------------------------------------------
 
 biol.endpoints<-c("H_ASCI", "D_ASCI")#
-
+names(all_asci)
 ## hydro
-hydro.endpoints<- unique(all_asci$hydro.endpoints)
+hydro.endpoints<- unique(all_asci$Hydro_endpoint)
 hydro.endpoints
 ## thresholds
 
@@ -123,7 +183,8 @@ bio_h_summary
 
 ## reduce glms and summary df to only rows needed
 ## find index to remove
-ind1 <- which(bio_h_summary$biol.endpoints == "H_ASCI" & bio_h_summary$thresholds == 0.86)
+ind1 <- which(bio_h_summary$biol.endpoints == "H_ASCI" & bio_h_summary$thresholds == 0.86 
+              & bio_h_summary$hydro.endpoints %in% RB9_metrics)
 
 ind1 ## use only these 
 
@@ -141,7 +202,7 @@ load(file = "models/01a_ASCI_positive_GLM_all_delta_mets_April2021.RData")
 pos.glm <- pos.glm[ind1]
 
 head(delta_long) ## new data to predict on
-
+dim(delta_long)
 ## define metrics
 metrics <- unique(bio_h_summary$hydro.endpoints)
 
@@ -153,9 +214,9 @@ for(i in 1: length(metrics)) {
   met <- metrics[i]
 
   hydroxx <- delta_long %>%
-    filter(flow_metric == met)
+    filter(hydro.endpoints == met)
   
-  unique(hydroxx$flow_metric)
+  unique(hydroxx$FlowMetric)
   
   ## get models for pos and neg
   posMod <- pos.glm[i][[1]]
@@ -165,25 +226,25 @@ for(i in 1: length(metrics)) {
   new_data_current_pos <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltah_cur_ref_final",
+    filter(Scenario == "Current",
            !hydro < 0)
   
   new_data_current_neg <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltah_cur_ref_final",
+    filter(Scenario == "Current",
            !hydro >= 0)
   
-  new_data_water_pos <- hydroxx %>%
+  new_data_Hist_pos <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltaH_watercon_ref_final",
+    filter(Scenario == "Historical",
            !hydro < 0)
   
-  new_data_water_neg <- hydroxx %>%
+  new_data_Hist_neg <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltaH_watercon_ref_final",
+    filter(Scenario == "Historical",
            !hydro >= 0)
     
 
@@ -192,47 +253,74 @@ for(i in 1: length(metrics)) {
   negModCurrent <- predict(negMod, new_data_current_neg, type = "response")
   
   ## predict water cons conditions
-  posModWater <- predict(posMod, new_data_water_pos, type = "response")
-  negModWater <- predict(negMod, new_data_water_neg, type = "response")
+  posModHist <- predict(posMod, new_data_Hist_pos, type = "response")
+  negModHist <- predict(negMod, new_data_Hist_neg, type = "response")
   
   ## add to dfs and scale
   ## current
   new_data_current_pos <-  new_data_current_pos %>%
     mutate(PredictedProbability = posModCurrent) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability))) %>%
+    mutate(CurrentDelta = (hydro-min(hydro))/
+             (max(hydro)-min(hydro))) 
+  
+  new_data_current_pos
   
   new_data_current_neg <-  new_data_current_neg %>%
     mutate(PredictedProbability = negModCurrent) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability))) %>%
+    mutate(CurrentDelta = (hydro-min(hydro))/
+             (max(hydro)-min(hydro)))  
   
-  ## water conservation
-  new_data_water_pos <-  new_data_water_pos %>%
-    mutate(PredictedProbability = posModWater) %>%
+  ## Hist conservation
+  new_data_Hist_pos <-  new_data_Hist_pos %>%
+    mutate(PredictedProbability = posModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability))) %>%
+    mutate(HistDelta = (hydro-min(hydro))/
+             (max(hydro)-min(hydro))) 
   
-  new_data_water_neg <-  new_data_water_neg %>%
-    mutate(PredictedProbability = negModWater) %>%
+  new_data_Hist_neg <-  new_data_Hist_neg %>%
+    mutate(PredictedProbability = negModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability))) %>%
+    mutate(HistDelta = (hydro-min(hydro))/
+             (max(hydro)-min(hydro))) 
   
   ## combine all data
-  WaterProbs <- bind_rows( new_data_water_pos, new_data_water_neg)
+  HistProbs <- bind_rows(new_data_Hist_pos, new_data_Hist_neg)
+  
+  HistProbs <- HistProbs %>%
+    pivot_longer(HistDelta, names_to = "ScenarioDelta", values_to = "Delta")
+  
   CurrentProbs <-  bind_rows(new_data_current_pos, new_data_current_neg)
   
-  AllProbs <- bind_rows(WaterProbs, CurrentProbs)
+  CurrentProbs <- CurrentProbs %>%
+    pivot_longer(CurrentDelta, names_to = "ScenarioDelta", values_to = "Delta")
+  
+  AllProbs <- bind_rows(HistProbs, CurrentProbs)
+  
+  AllDelta <- AllProbs %>%
+    select(-PredictedProbability,-PredictedProbabilityScaled,-hydro, -wayr, -comid_wy, -FlowMetric, -Scenario) %>%
+    # group_by(comid, IDs, hydro.endpoints)
+    pivot_wider(names_from = "ScenarioDelta", values_from = "Delta") %>%
+    mutate(RelChangeDelta = (CurrentDelta-HistDelta)/HistDelta)
+
   AllProbs <- AllProbs %>%
-    select(-PredictedProbability, -hydro) %>%
+    select(-PredictedProbability,-Delta, -wayr, -comid_wy, -FlowMetric) %>%
+    # group_by(comid, IDs, hydro.endpoints)
     pivot_wider(names_from = "Scenario", values_from = "PredictedProbabilityScaled") %>%
-    mutate(RelChange = (deltaH_watercon_ref_final-deltah_cur_ref_final)/deltah_cur_ref_final)
+    mutate(RelChange = (Current-Historical)/Historical) 
+  
   
   AllProbsMed <- AllProbs %>%
-    group_by(site, flow_metric, region) %>%
+    group_by(comid, IDs, hydro.endpoints) %>%
     summarise(MedChange = median(RelChange))
   
   ## save
+  save(AllDelta, file = paste0("output_data/01_asci_rel_change_in_delta_", met, ".RData"))
   save(AllProbs, file = paste0("output_data/01_asci_rel_change_in_prob_", met, ".RData"))
   save(AllProbsMed, file = paste0("output_data/01_asci_median_rel_change_in_prob_", met, ".RData"))
 
@@ -256,7 +344,8 @@ bio_h_summary
 
 ## reduce glms and summary df to only rows needed
 ## find index to remove
-ind1 <- which(bio_h_summary$biol.endpoints == "CSCI" & bio_h_summary$thresholds == 0.79)
+ind1 <- which(bio_h_summary$biol.endpoints == "CSCI" & bio_h_summary$thresholds == 0.79
+              & bio_h_summary$hydro.endpoints %in% RB9_metrics)
 
 ind1 ## use only these 
 
@@ -287,9 +376,9 @@ for(i in 1: length(metrics)) {
   met <- metrics[i]
   
   hydroxx <- delta_long %>%
-    filter(flow_metric == met)
+    filter(hydro.endpoints == met)
   
-  unique(hydroxx$flow_metric)
+  unique(hydroxx$FlowMetric)
   
   ## get models for pos and neg
   posMod <- pos.glm[i][[1]]
@@ -299,25 +388,25 @@ for(i in 1: length(metrics)) {
   new_data_current_pos <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltah_cur_ref_final",
+    filter(Scenario == "Current",
            !hydro < 0)
   
   new_data_current_neg <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltah_cur_ref_final",
+    filter(Scenario == "Current",
            !hydro >= 0)
   
-  new_data_water_pos <- hydroxx %>%
+  new_data_Hist_pos <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltaH_watercon_ref_final",
+    filter(Scenario == "Historical",
            !hydro < 0)
   
-  new_data_water_neg <- hydroxx %>%
+  new_data_Hist_neg <- hydroxx %>%
     # pivot_wider(names_from = Scenario, values_from = DeltaH)
     rename(hydro =  DeltaH) %>%
-    filter(Scenario == "deltaH_watercon_ref_final",
+    filter(Scenario == "Historical",
            !hydro >= 0)
   
   
@@ -326,8 +415,8 @@ for(i in 1: length(metrics)) {
   negModCurrent <- predict(negMod, new_data_current_neg, type = "response")
   
   ## predict water cons conditions
-  posModWater <- predict(posMod, new_data_water_pos, type = "response")
-  negModWater <- predict(negMod, new_data_water_neg, type = "response")
+  posModHist <- predict(posMod, new_data_Hist_pos, type = "response")
+  negModHist <- predict(negMod, new_data_Hist_neg, type = "response")
   
   ## add to dfs and scale
   ## current
@@ -336,36 +425,41 @@ for(i in 1: length(metrics)) {
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
              (max(PredictedProbability)-min(PredictedProbability))) 
   
+  new_data_current_pos
+  
   new_data_current_neg <-  new_data_current_neg %>%
     mutate(PredictedProbability = negModCurrent) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
              (max(PredictedProbability)-min(PredictedProbability))) 
   
-  ## water conservation
-  new_data_water_pos <-  new_data_water_pos %>%
-    mutate(PredictedProbability = posModWater) %>%
+  ## Hist conservation
+  new_data_Hist_pos <-  new_data_Hist_pos %>%
+    mutate(PredictedProbability = posModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
              (max(PredictedProbability)-min(PredictedProbability))) 
   
-  new_data_water_neg <-  new_data_water_neg %>%
-    mutate(PredictedProbability = negModWater) %>%
+  new_data_Hist_neg <-  new_data_Hist_neg %>%
+    mutate(PredictedProbability = negModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
              (max(PredictedProbability)-min(PredictedProbability))) 
   
   ## combine all data
-  WaterProbs <- bind_rows( new_data_water_pos, new_data_water_neg)
+  HistProbs <- bind_rows(new_data_Hist_pos, new_data_Hist_neg)
+  HistProbs
   CurrentProbs <-  bind_rows(new_data_current_pos, new_data_current_neg)
   
-  AllProbs <- bind_rows(WaterProbs, CurrentProbs)
+  AllProbs <- bind_rows(HistProbs, CurrentProbs)
+  
+  
   AllProbs <- AllProbs %>%
-    select(-PredictedProbability, -hydro) %>%
+    select(-PredictedProbability, -hydro, -wayr, -comid_wy, -FlowMetric) %>%
+    # group_by(comid, IDs, hydro.endpoints)
     pivot_wider(names_from = "Scenario", values_from = "PredictedProbabilityScaled") %>%
-    mutate(RelChange = (deltaH_watercon_ref_final-deltah_cur_ref_final)/deltah_cur_ref_final)
+    mutate(RelChange = (Current-Historical)/Historical)
   
   AllProbsMed <- AllProbs %>%
-    group_by(site, flow_metric, region) %>%
-    summarise(MedChang = median(RelChange))
-  
+    group_by(comid, IDs, hydro.endpoints) %>%
+    summarise(MedChange = median(RelChange))
   
   ## save
   save(AllProbs, file = paste0("output_data/01_csci_rel_change_in_prob_", met, ".RData"))
@@ -394,7 +488,7 @@ for(i in 1:length(rel)) {
 }
 
 AllProbx <- AllProbx %>%
-  mutate(flow_metric = as.factor(flow_metric))
+  mutate(flow_metric = as.factor(hydro.endpoints))
 
 min(na.omit(AllProbx$RelChange))
 
@@ -423,7 +517,7 @@ for(i in 1:length(rel)) {
 }
 
 AllProbx <- AllProbx %>%
-  mutate(flow_metric = as.factor(flow_metric))
+  mutate(flow_metric = as.factor(hydro.endpoints))
 
 min(na.omit(AllProbx$RelChange))
 
@@ -439,5 +533,6 @@ ggsave(p1, filename=file.name1, dpi=300, height=5, width=6)
 
 
 # Map change in probability -----------------------------------------------
+
 
 
