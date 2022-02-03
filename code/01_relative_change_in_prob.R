@@ -4,6 +4,8 @@
 
 library(tidyverse)
 library(tidyr)
+library(tidylog)
+
 getwd()
 out.dir <- "figures/"
 
@@ -33,17 +35,30 @@ limits <- left_join(limits, labels, by = "Hydro_endpoint")
 
 # SOC data (to change with RB9 data) --------------------------------------
 
-
 delta <- read.csv("input_data/2022-01-25_RFpred_output_alldata_SDCOMIDs.csv")
 head(delta)
 dim(delta)
 
-unique(delta$wayr)
-
+## remove duplicates
 delta <- delta %>% distinct()
 
+## add dummy water year type
+wyt_df <- data.frame(unique(delta$wayr))
+colnames(wyt_df)[1] <- "wayr"
+wyt_df$wytx[1:22] <- "dry"
+wyt_df$wytx[23:44] <- "moderate"
+wyt_df$wytx[45:66] <- "wet"
+
+wyt_df$wyt <- sample(wyt_df$wytx)
+wyt_df$wytx <- NULL
+
+wyt_df
+
+unique(delta$wayr)
+
+
 # test <- delta %>%
-#   filter(comid == "20350539" )
+#   filter(comid == "20350539")
 
 ## get delta h at each subbasin
 
@@ -80,6 +95,8 @@ delta_long <- delta_long %>%
                                      FlowMetric == "d_wet_bfl_mag_50" ~ "Wet_BFL_Mag_50",)) %>%
   filter(!FlowMetric %in% c("d_peak_10", "d_peak_2", "d_peak_5"))
 
+
+
 ## add year id
 ## define years to be assigned in scenrios
 wayr1 <- seq(1950, 1982, 1)
@@ -102,6 +119,7 @@ colnames(yearDF2)[1] <- "wayr"
 ## combine scenario years
 yearDF <- bind_rows(yearDF1, yearDF2)
 yearDF
+
 ## add back to DF
 delta_long <- left_join(delta_long, yearDF, by = "wayr")
 
@@ -160,8 +178,6 @@ all_csci <- left_join(all_csci, labels, by ="Hydro_endpoint")
 ## subset to only important metrics
 # all_csci_sub <- subset(all_csci, Hydro_endpoint %in% metrics)
 
-
-
 # delta H probability -----------------------------------------------------
 
 ## estimate probability of good score with all subbasins and years
@@ -197,7 +213,7 @@ bio_h_summary <- bio_h_summary %>%
 ## upload GLMs and subset
 load(file = "models/01a_ASCI_negative_GLM_all_delta_mets_April2021.RData")
 neg.glm <- neg.glm[ind1]
-
+neg.glm
 load(file = "models/01a_ASCI_positive_GLM_all_delta_mets_April2021.RData")
 pos.glm <- pos.glm[ind1]
 
@@ -261,68 +277,87 @@ for(i in 1: length(metrics)) {
   new_data_current_pos <-  new_data_current_pos %>%
     mutate(PredictedProbability = posModCurrent) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) %>%
-    mutate(CurrentDelta = (hydro-min(hydro))/
-             (max(hydro)-min(hydro))) 
+             (max(PredictedProbability)-min(PredictedProbability)))# %>%
+    # mutate(CurrentDeltaNorm = (hydro-min(hydro))/
+    #          (max(hydro)-min(hydro))) 
   
   new_data_current_pos
   
   new_data_current_neg <-  new_data_current_neg %>%
     mutate(PredictedProbability = negModCurrent) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) %>%
-    mutate(CurrentDelta = (hydro-min(hydro))/
-             (max(hydro)-min(hydro)))  
+             (max(PredictedProbability)-min(PredictedProbability)))# %>%
+    # mutate(CurrentDeltaNorm = (hydro-min(hydro))/
+    #          (max(hydro)-min(hydro)))  
   
   ## Hist conservation
   new_data_Hist_pos <-  new_data_Hist_pos %>%
     mutate(PredictedProbability = posModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) %>%
-    mutate(HistDelta = (hydro-min(hydro))/
-             (max(hydro)-min(hydro))) 
+             (max(PredictedProbability)-min(PredictedProbability)))# %>%
+    # mutate(HistDeltaNorm = (hydro-min(hydro))/
+    #          (max(hydro)-min(hydro))) 
   
   new_data_Hist_neg <-  new_data_Hist_neg %>%
     mutate(PredictedProbability = negModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) %>%
-    mutate(HistDelta = (hydro-min(hydro))/
-             (max(hydro)-min(hydro))) 
+             (max(PredictedProbability)-min(PredictedProbability))) #%>%
+    # mutate(HistDeltaNorm = (hydro-min(hydro))/
+    #          (max(hydro)-min(hydro))) 
   
   ## combine all data
   HistProbs <- bind_rows(new_data_Hist_pos, new_data_Hist_neg)
   
-  HistProbs <- HistProbs %>%
-    pivot_longer(HistDelta, names_to = "ScenarioDelta", values_to = "Delta")
+  ## add water year type
+  HistProbs <- right_join( HistProbs, wyt_df, by = "wayr")
   
+  ## calculate median per site per wyt
+  HistProbsMed <-   HistProbs %>%
+    group_by(comid, hydro.endpoints, wyt) %>%
+    summarise(MedProb = median(PredictedProbabilityScaled), 
+              MedDelta = median(hydro)) %>%
+    mutate(Scenario = "Historical")
+
+  ## combine current
   CurrentProbs <-  bind_rows(new_data_current_pos, new_data_current_neg)
+  ## add water year type
+  CurrentProbs <- right_join(CurrentProbs, wyt_df, by = "wayr")
   
-  CurrentProbs <- CurrentProbs %>%
-    pivot_longer(CurrentDelta, names_to = "ScenarioDelta", values_to = "Delta")
+  ## calculate median per site per wyt
+  CurrentProbsMed <-   CurrentProbs %>%
+    group_by(comid, hydro.endpoints, wyt) %>%
+    summarise(MedProb = median(PredictedProbabilityScaled), 
+              MedDelta = median(hydro)) %>%
+    mutate(Scenario = "Current")
   
-  AllProbs <- bind_rows(HistProbs, CurrentProbs)
+  ## combine historical and current
+  
+  AllProbs <- bind_rows(HistProbsMed, CurrentProbsMed)
+  names(AllProbs)
   
   AllDelta <- AllProbs %>%
-    select(-PredictedProbability,-PredictedProbabilityScaled,-hydro, -wayr, -comid_wy, -FlowMetric, -Scenario) %>%
+    select(-MedProb) %>%
     # group_by(comid, IDs, hydro.endpoints)
-    pivot_wider(names_from = "ScenarioDelta", values_from = "Delta") %>%
-    mutate(RelChangeDelta = (CurrentDelta-HistDelta)/HistDelta)
+    pivot_wider(names_from = "Scenario", values_from = "MedDelta") %>%
+    mutate(RelChangeDelta = (Current-Historical)/Historical) %>%
+    mutate(AbsChangeDelta = (Current-Historical)) 
 
   AllProbs <- AllProbs %>%
-    select(-PredictedProbability,-Delta, -wayr, -comid_wy, -FlowMetric) %>%
-    # group_by(comid, IDs, hydro.endpoints)
-    pivot_wider(names_from = "Scenario", values_from = "PredictedProbabilityScaled") %>%
-    mutate(RelChange = (Current-Historical)/Historical) 
+    select(-MedDelta) %>%
+    # mutate(PredictedProbabilityScaled = ifelse(PredictedProbabilityScaled == 0, 0.00001, PredictedProbabilityScaled)) %>%
+    pivot_wider(names_from = "Scenario", values_from = "MedProb") %>%
+    mutate(RelChange = (Current-Historical)/Historical) %>%
+    mutate(AbsChange = (Current-Historical)) 
   
   
-  AllProbsMed <- AllProbs %>%
-    group_by(comid, IDs, hydro.endpoints) %>%
-    summarise(MedChange = median(RelChange))
+  # AllProbsMed <- AllProbs %>%
+  #   group_by(comid, IDs, hydro.endpoints) %>%
+  #   summarise(MedChange = median(RelChange))
   
   ## save
   save(AllDelta, file = paste0("output_data/01_asci_rel_change_in_delta_", met, ".RData"))
   save(AllProbs, file = paste0("output_data/01_asci_rel_change_in_prob_", met, ".RData"))
-  save(AllProbsMed, file = paste0("output_data/01_asci_median_rel_change_in_prob_", met, ".RData"))
+  # save(AllProbsMed, file = paste0("output_data/01_asci_median_rel_change_in_prob_", met, ".RData"))
 
   
 }
@@ -358,7 +393,7 @@ bio_h_summary <- bio_h_summary %>%
 ## upload GLMs and subset
 load(file = "models/01_CSCI_negative_GLM_all_delta_mets_April2021.RData")
 neg.glm <- neg.glm[ind1]
-
+neg.glm 
 load(file = "models/01_CSCI_positive_GLM_all_delta_mets_April2021.RData")
 pos.glm <- pos.glm[ind1]
 
@@ -423,51 +458,90 @@ for(i in 1: length(metrics)) {
   new_data_current_pos <-  new_data_current_pos %>%
     mutate(PredictedProbability = posModCurrent) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability)))# %>%
+  # mutate(CurrentDeltaNorm = (hydro-min(hydro))/
+  #          (max(hydro)-min(hydro))) 
   
   new_data_current_pos
   
   new_data_current_neg <-  new_data_current_neg %>%
     mutate(PredictedProbability = negModCurrent) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability)))# %>%
+  # mutate(CurrentDeltaNorm = (hydro-min(hydro))/
+  #          (max(hydro)-min(hydro)))  
   
   ## Hist conservation
   new_data_Hist_pos <-  new_data_Hist_pos %>%
     mutate(PredictedProbability = posModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability)))# %>%
+  # mutate(HistDeltaNorm = (hydro-min(hydro))/
+  #          (max(hydro)-min(hydro))) 
   
   new_data_Hist_neg <-  new_data_Hist_neg %>%
     mutate(PredictedProbability = negModHist) %>%
     mutate(PredictedProbabilityScaled = (PredictedProbability-min(PredictedProbability))/
-             (max(PredictedProbability)-min(PredictedProbability))) 
+             (max(PredictedProbability)-min(PredictedProbability))) #%>%
+  # mutate(HistDeltaNorm = (hydro-min(hydro))/
+  #          (max(hydro)-min(hydro))) 
   
   ## combine all data
   HistProbs <- bind_rows(new_data_Hist_pos, new_data_Hist_neg)
-  HistProbs
+  
+  ## add water year type
+  HistProbs <- right_join( HistProbs, wyt_df, by = "wayr")
+  
+  ## calculate median per site per wyt
+  HistProbsMed <-   HistProbs %>%
+    group_by(comid, hydro.endpoints, wyt) %>%
+    summarise(MedProb = median(PredictedProbabilityScaled), 
+              MedDelta = median(hydro)) %>%
+    mutate(Scenario = "Historical")
+  
+  ## combine current
   CurrentProbs <-  bind_rows(new_data_current_pos, new_data_current_neg)
+  ## add water year type
+  CurrentProbs <- right_join(CurrentProbs, wyt_df, by = "wayr")
   
-  AllProbs <- bind_rows(HistProbs, CurrentProbs)
+  ## calculate median per site per wyt
+  CurrentProbsMed <-   CurrentProbs %>%
+    group_by(comid, hydro.endpoints, wyt) %>%
+    summarise(MedProb = median(PredictedProbabilityScaled), 
+              MedDelta = median(hydro)) %>%
+    mutate(Scenario = "Current")
   
+  ## combine historical and current
+  
+  AllProbs <- bind_rows(HistProbsMed, CurrentProbsMed)
+  names(AllProbs)
+  
+  AllDelta <- AllProbs %>%
+    select(-MedProb) %>%
+    # group_by(comid, IDs, hydro.endpoints)
+    pivot_wider(names_from = "Scenario", values_from = "MedDelta") %>%
+    mutate(RelChangeDelta = (Current-Historical)/Historical) %>%
+    mutate(AbsChangeDelta = (Current-Historical)) 
   
   AllProbs <- AllProbs %>%
-    select(-PredictedProbability, -hydro, -wayr, -comid_wy, -FlowMetric) %>%
-    # group_by(comid, IDs, hydro.endpoints)
-    pivot_wider(names_from = "Scenario", values_from = "PredictedProbabilityScaled") %>%
-    mutate(RelChange = (Current-Historical)/Historical)
+    select(-MedDelta) %>%
+    # mutate(PredictedProbabilityScaled = ifelse(PredictedProbabilityScaled == 0, 0.00001, PredictedProbabilityScaled)) %>%
+    pivot_wider(names_from = "Scenario", values_from = "MedProb") %>%
+    mutate(RelChange = (Current-Historical)/Historical) %>%
+    mutate(AbsChange = (Current-Historical)) 
   
-  AllProbsMed <- AllProbs %>%
-    group_by(comid, IDs, hydro.endpoints) %>%
-    summarise(MedChange = median(RelChange))
+  
+  # AllProbsMed <- AllProbs %>%
+  #   group_by(comid, IDs, hydro.endpoints) %>%
+  #   summarise(MedChange = median(RelChange))
   
   ## save
+  save(AllDelta, file = paste0("output_data/01_csci_rel_change_in_delta_", met, ".RData"))
   save(AllProbs, file = paste0("output_data/01_csci_rel_change_in_prob_", met, ".RData"))
-  save(AllProbsMed, file = paste0("output_data/01_csci_median_rel_change_in_prob_", met, ".RData"))
+  # save(AllProbsMed, file = paste0("output_data/01_csci_median_rel_change_in_prob_", met, ".RData"))
   
   
 }
-
 
 
 
@@ -475,8 +549,8 @@ for(i in 1: length(metrics)) {
 
 # upload and combine change values
 
-rel <- list.files(path = "output_data", pattern ="asci_rel_change")
-
+rel <- list.files(path = "output_data", pattern ="asci_rel_change_in_prob")
+rel
 AllProbx <- NULL
 
 for(i in 1:length(rel)) {
@@ -487,25 +561,48 @@ for(i in 1:length(rel)) {
   
 }
 
-AllProbx <- AllProbx %>%
-  mutate(flow_metric = as.factor(hydro.endpoints))
+names(AllProbx)
 
-min(na.omit(AllProbx$RelChange))
+asciProbs <- AllProbx
 
-p1 <- ggplot(AllProbx, aes(x=flow_metric, y = RelChange)) +
+
+asciProbs <- asciProbs %>%
+  mutate(flow_metric = as.factor(hydro.endpoints)) 
+
+sum(is.na(asciProbs$hydro.endpoints))
+
+asciProbs <- na.omit(asciProbs)
+
+### assiugn water year type to compare like for like?
+
+min(na.omit(asciProbs$RelChange))
+
+p1a <- ggplot(asciProbs, aes(x=flow_metric, y = RelChange)) +
   geom_boxplot() +
+  facet_wrap(~wyt) +
   theme(axis.text.x = element_text(angle = 60, hjust=1)) +
-  scale_y_continuous(name="Change in Probability", limits = c(-1,1)) 
+  scale_y_continuous(name="Change in Probability") 
 
-p1
+p1a
 
-file.name1 <- paste0(out.dir, "ASCI_change_in_prob_boxplots.jpg")
-ggsave(p1, filename=file.name1, dpi=300, height=5, width=6)
+file.name1 <- paste0(out.dir, "ASCI_change_in_prob_boxplots_relative.jpg")
+ggsave(p1a, filename=file.name1, dpi=300, height=5, width=6)
+
+p2a <- ggplot(asciProbs, aes(x=flow_metric, y = AbsChange)) +
+  geom_boxplot() +
+  facet_wrap(~wyt) +
+  theme(axis.text.x = element_text(angle = 60, hjust=1)) +
+  scale_y_continuous(name="Change in Probability") 
+
+p2a
+
+file.name1 <- paste0(out.dir, "ASCI_change_in_prob_boxplots_absolute.jpg")
+ggsave(p2a, filename=file.name1, dpi=300, height=5, width=6)
 
 ## csci
 
-rel <- list.files(path = "output_data", pattern ="csci_rel_change")
-
+rel <- list.files(path = "output_data", pattern ="csci_rel_change_in_prob")
+rel
 AllProbx <- NULL
 
 for(i in 1:length(rel)) {
@@ -516,23 +613,157 @@ for(i in 1:length(rel)) {
   
 }
 
-AllProbx <- AllProbx %>%
-  mutate(flow_metric = as.factor(hydro.endpoints))
+csciProbs <- AllProbx
 
-min(na.omit(AllProbx$RelChange))
+csciProbs <-csciProbs %>%
+  mutate(flow_metric = as.factor(hydro.endpoints)) 
 
-p1 <- ggplot(AllProbx, aes(x=flow_metric, y = RelChange)) +
+sum(is.na(csciProbs$hydro.endpoints))
+
+csciProbs <- na.omit(csciProbs)
+
+min(na.omit(csciProbs$RelChange))
+
+p1c <- ggplot(csciProbs, aes(x=flow_metric, y = RelChange)) +
   geom_boxplot() +
+  facet_wrap(~wyt) +
   theme(axis.text.x = element_text(angle = 60, hjust=1)) +
-  scale_y_continuous(name="Change in Probability", limits = c(-1,1)) 
+  scale_y_continuous(name="Change in Probability") 
 
-p1
+p1c
 
-file.name1 <- paste0(out.dir, "CSCI_change_in_prob_boxplots.jpg")
-ggsave(p1, filename=file.name1, dpi=300, height=5, width=6)
+file.name1 <- paste0(out.dir, "CSCI_change_in_prob_boxplots_relative.jpg")
+ggsave(p1c, filename=file.name1, dpi=300, height=5, width=6)
+
+p2c <- ggplot(csciProbs, aes(x=flow_metric, y = AbsChange)) +
+  geom_boxplot() +
+  facet_wrap(~wyt) +
+  theme(axis.text.x = element_text(angle = 60, hjust=1)) +
+  scale_y_continuous(name="Change in Probability") 
+
+p2c
+
+file.name1 <- paste0(out.dir, "CSCI_change_in_prob_boxplots_absolute.jpg")
+ggsave(p2c, filename=file.name1, dpi=300, height=5, width=6)
 
 
-# Map change in probability -----------------------------------------------
+# Delta H figure -----------------------------------------------
+
+## function to normailise between -1 and 1
+ReScale <- function(x,first,last){(last-first)/(max(x)-min(x))*(x-min(x))+first}
+
+# upload and combine change values - same for both ASCI and CSCI
+
+rel <- list.files(path = "output_data", pattern ="asci_rel_change_in_delta")
+rel
+AllDeltax <- NULL
+
+for(i in 1:length(rel)) {
+  
+  load(file = paste0("output_data/", rel[i]))
+  
+  AllDeltax <- bind_rows(AllDeltax, AllDelta)
+  
+}
+
+names(AllDeltax)
+AllDeltax <- na.omit(AllDeltax) ### fix inf values in loop!!!!!!!!!
+
+Deltax <- AllDeltax %>%
+  mutate(flow_metric = as.factor(hydro.endpoints)) %>%
+  group_by(flow_metric, wyt) %>%
+  mutate(AbsChangeDeltaNorm = (AbsChangeDelta+min(AbsChangeDelta))/
+                           (max(AbsChangeDelta)-min(AbsChangeDelta))) %>%
+  mutate(AbsChangeDeltaScale = ReScale(AbsChangeDelta, -1,1))
 
 
+p1a <- ggplot(Deltax, aes(x=flow_metric, y = RelChangeDelta)) +
+  geom_boxplot() +
+  facet_wrap(~wyt) +
+  theme(axis.text.x = element_text(angle = 60, hjust=1)) +
+  scale_y_continuous(name="Change in Delta H") 
+  # scale_y_log10(name="Change in Delta H") 
+
+p1a
+
+file.name1 <- paste0(out.dir, "Change_in_delta_boxplots_relative.jpg")
+ggsave(p1a, filename=file.name1, dpi=300, height=5, width=6)
+
+p2a <- ggplot(Deltax, aes(x=flow_metric, y = AbsChangeDelta)) +
+  geom_boxplot() +
+  facet_wrap(~wyt) +
+  theme(axis.text.x = element_text(angle = 60, hjust=1)) +
+  scale_y_continuous(name="Change in Delta H") 
+  # scale_y_log10(name="Change in Delta H") 
+
+p2a
+
+file.name1 <- paste0(out.dir, "Change_in_delta_boxplots_absolute.jpg")
+ggsave(p2a, filename=file.name1, dpi=300, height=5, width=6)
+
+p3a <- ggplot(Deltax, aes(x=flow_metric, y = AbsChangeDeltaScale)) +
+  geom_boxplot() +
+  facet_wrap(~wyt) +
+  theme(axis.text.x = element_text(angle = 60, hjust=1)) +
+  scale_y_continuous(name="Change in Delta H") 
+# scale_y_log10(name="Change in Delta H") 
+
+p3a
+
+file.name1 <- paste0(out.dir, "Change_in_delta_boxplots_absolute_scale.jpg")
+ggsave(p3a, filename=file.name1, dpi=300, height=5, width=6)
+
+
+# Probability and Delta plot ----------------------------------------------
+
+### combine data
+
+head(asciProbs)
+head(csciProbs)
+head(Deltax)
+
+asci <- asciProbs %>%
+  ungroup() %>%
+  select(comid, flow_metric, wyt, AbsChange) %>%
+  rename(ASCI = AbsChange)
+
+csci <- csciProbs %>%
+  ungroup() %>%
+  select(comid, flow_metric, wyt, AbsChange) %>%
+  rename(CSCI = AbsChange)
+
+deltaH <- Deltax %>%
+  select(comid, flow_metric, wyt, AbsChangeDeltaScale) %>%
+  rename(DeltaH = AbsChangeDeltaScale)
+
+head(asci)
+head(csci)
+head(deltaH)
+
+bio <- full_join(asci, csci, by =c("comid", "flow_metric", "wyt")) ## some didn't match, fix!!!
+allData <- full_join(bio, deltaH, by =c("comid", "flow_metric", "wyt")) ## some didn't match, fix!!!
+
+head(allData)
+
+## make longer
+allData <- allData %>%
+  pivot_longer(ASCI:CSCI, names_to = "Bio", values_to = "Change")
+
+
+## plot
+ggplot(allData, aes(x=DeltaH, y = Change)) +
+  geom_point(aes(col = wyt)) +
+  facet_grid(rows = vars(Bio), cols = vars(flow_metric)) +
+  scale_x_continuous(name="Change in Delta H") +
+  # theme(axis.text.x = element_text(angle = 60, hjust=1)) +
+  scale_y_continuous(name="Change in Probability")
+
+
+### get mean and error
+
+allDataMean <- allData %>% 
+  group_by(Bio, flow_metric) %>%
+  summarise(DeltaHMean = mean(DeltaH), BioMean = mean(na.omit((Change))))
+
+allDataMean
 
