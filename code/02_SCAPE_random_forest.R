@@ -62,7 +62,7 @@ Xtest      <- csci[-indextrain,2:14]
 Ytrain     <- csci[ indextrain,1]
 Ytest      <- csci[-indextrain,1]
 
-
+Xtrain
 qrf <- quantregForest(x=Xtrain, y=Ytrain)
 qrf
 qrf <- quantregForest(x=Xtrain, y=Ytrain, nodesize=10,sampsize=30)

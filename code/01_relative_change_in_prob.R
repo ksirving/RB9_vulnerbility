@@ -35,7 +35,7 @@ limits <- left_join(limits, labels, by = "Hydro_endpoint")
 
 # SOC data (to change with RB9 data) --------------------------------------
 
-delta <- read.csv("input_data/2022-01-25_RFpred_output_alldata_SDCOMIDs.csv")
+delta <- read.csv("ignore/2022-01-25_RFpred_output_alldata_SDCOMIDs.csv")
 head(delta)
 dim(delta)
 
@@ -80,7 +80,7 @@ head(delta_long)
 
 
 unique(delta_long$FlowMetric)
-unique(all_asci$Hydro_endpoint)
+# unique(all_asci$Hydro_endpoint)
 
 delta_long <- delta_long %>%
   mutate(Scenario = ifelse(wayr %in% 1950:1982, "Historical", "Current")) %>%
@@ -133,6 +133,8 @@ RB9_metrics
 # test <- delta_long %>%
 #   filter(comid == "20350539",hydro.endpoints == "DS_Mag_50" )
 
+## save
+write.csv(delta_long, "ignore/01_delta_h_long.csv")
 
 
 # ASCI Curve data --------------------------------------------------------------------
