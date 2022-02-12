@@ -53,8 +53,6 @@ streamClass <- streamClass %>%
 
 streamClass <- as.data.frame(streamClass)
 
-
-
 ## RB9 NHD reach
 
 nhdReach <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment - General/Data/SpatialData/NHDplus_RB9.shp') %>%
@@ -173,7 +171,7 @@ sum(is.na(rf_full.dat))
 
 rf_full.dat <- na.omit(rf_full.dat)
 
-
+rf_full.dat
 # ?quantregForest
 set.seed(10101)
 rf_full<-quantregForest(y=rf_full.dat$csci,
@@ -186,8 +184,24 @@ rf_full<-quantregForest(y=rf_full.dat$csci,
 #                         x=as.matrix(csci.rf.dat[,core.candidates]),
 #                         keep.inbag=T, importance=T,proximity=T)
 
+rf_full$importance
+mean(rf_full$rsq)
+rf_full$predicted
+
+rf_full.dat[, full.vars]
+
+### quantiles at cal model sites
+
+pred_at_mod_sites <- predict(rf_full, newdata = rf_full.dat[, full.vars], what=seq(from=0.05, to=.95, by=.05), na.rm=T) %>%
+  as.data.frame %>%
+  mutate(comid = rf_full.dat$comid)
 
 
+
+names(pred_at_mod_sites) <- c(paste0("core",formatC(as.numeric(seq(from=0.05, to=.95, by=.05)), format = 'f', flag='0', digits = 2)), 'comid')
+
+spat <- pred_at_mod_sites ## needs geometry
+pred_at_mod_sites 
 ######
 # get model predictions, have to separate calibration oob from statewide
 
@@ -198,7 +212,7 @@ delta <- delta %>%
   group_by(comid, hydro.endpoints) %>%
   summarise(MedDelta = median(DeltaH)) %>%
   pivot_wider(names_from = hydro.endpoints, values_from = MedDelta)
-##
+
 # core model
 
 # prediction data w/o calibration dataset
@@ -211,21 +225,29 @@ newdatcr <- delta %>%
 # estimates for same comid must be averaged with oob estimates
 predcore_oob <- predict(rf_full, what=seq(from=0.05, to=.95, by=.05), na.rm=T) %>%
   as.data.frame %>%
-  mutate(COMID = rf_full.dat$comid) %>%
-  gather('var', 'val', -COMID) %>%
-  group_by(COMID, var) %>%
+  mutate(comid = rf_full.dat$comid) %>%
+  gather('var', 'val', -comid) %>%
+  group_by(comid, var) %>%
   summarize(val = mean(val)) %>%
   spread(var, val) %>%
   .[, c(2:20, 1)]
 
-
+dim(predcore_oob)## 259 n calibration sites
+head(predcore_oob)
+newdatcr
 predcore_all <- predict(rf_full, newdata = newdatcr[, -1], what=seq(from=0.05, to=.95, by=.05), na.rm=T) %>%
   as.data.frame %>%
   mutate(comid = newdatcr$comid)
 
+dim(predcore_all) ## 2079
+str(predcore_all)
+length(unique(comid_prd$comid)) ## 2079
+
 # join calibration oob with statewide
 predcore <- bind_rows(predcore_oob, predcore_all)
-names(predcore) <- c(paste0("core",formatC(as.numeric(seq(from=0.05, to=.95, by=.05)), format = 'f', flag='0', digits = 2)), 'COMID')
+head(predcore)
+dim(predcore) ## 2329
+names(predcore) <- c(paste0("core",formatC(as.numeric(seq(from=0.05, to=.95, by=.05)), format = 'f', flag='0', digits = 2)), 'comid')
 
 pred_all <- predcore
 
@@ -235,17 +257,18 @@ pred_all <- predcore
 #   as.data.frame
 
 pred_all$DevData<-
-  ifelse(pred_all$COMID %in% csci$comid[which(csci$SiteSet=="Cal")],"Cal",
-         ifelse(pred_all$COMID %in% csci$comid[which(csci$SiteSet=="Val")],"Val","No"))
+  ifelse(pred_all$comid %in% csci$comid[which(csci$SiteSet=="Cal")],"Cal",
+         ifelse(pred_all$comid %in% csci$comid[which(csci$SiteSet=="Val")],"Val","No"))
 
 comid_prd <- pred_all
-comid_prd
+comid_prd ## 2329
 # csci data for comparison with stream comid
 csci_comid <- csci
-
+spat
 ##
+csci_comid
 # save all
-
+save(spat, file = 'output_data/02_spat.RData', compress = 'xz')
 save(csci_comid, file = 'output_data/02_csci_comid.RData', compress = 'xz')
 save(comid_prd, file = 'output_data/02_comid_prd.RData', compress = 'xz')
 save(rf_full,file = "models/02_rf_core.Rdata", compress = 'xz')
