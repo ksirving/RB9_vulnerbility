@@ -12,12 +12,13 @@ library(tidyverse)
 library(tidyr)
 library(tidylog)
 
+outdir <- "/Users/katieirving/Documents/Documents - Katie’s MacBook Pro/git/RB9_vulnerbility/figures"
 
 # Upload all data ---------------------------------------------------------
 
 # hydro for input
 
-## flow data
+## flow data to build model
 dh_data <- read.csv("/Volumes/Biology/San Juan WQIP_KTQ/Data/Working/Regional_Curves_CSCI_ASCI_Annie/Data/Flow/subset_woutLARsitematches/DeltaH_FINAL/SoCal_bio_deltaH_summary_supp_final.csv")
 
 ## subset median
@@ -39,11 +40,11 @@ prj <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
 ## stream class
 
-streamClass <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment - General/Data/SpatialData/NHD_reaches_RB9_castreamclassification.shp') %>%
-  spTransform(prj) %>%
-  st_as_sf %>%
-  st_simplify(dTolerance = 0.5, preserveTopology = T)
-streamClass
+# all cali hydro, really simplified
+streamClass <- readOGR('/Volumes/SpatialData/Spatial_Data/CA hydrologic Stream Class-harmonized/Final_Classification_9CLASS/Final_Classification_9CLASS.shp') %>% 
+  spTransform(prj) %>% 
+  st_as_sf %>% 
+  st_simplify(dTolerance = 0.5, preserveTopology = T) 
 
 # unique(streamClass$GNIS_NAME)
 
@@ -53,12 +54,17 @@ streamClass <- streamClass %>%
 
 streamClass <- as.data.frame(streamClass)
 
+unique(streamClass$CLASS)
+unique(streamClass$comid)
 ## RB9 NHD reach
 
 nhdReach <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment - General/Data/SpatialData/NHDplus_RB9.shp') %>%
   spTransform(prj) %>%
   st_as_sf %>%
   st_simplify(dTolerance = 0.5, preserveTopology = T)
+nhdReach
+# plot(nhdReach)
+# plot(sites, add=T)
 
 ## csci data
 
@@ -75,21 +81,23 @@ csci$Largest<-
   })
 
 csci <- as.data.frame(csci)
-
+dim(csci)
 ### add stream class
 # ?left_join
-# csci <- left_join(csci, streamClass, by = "comid")
-# sum(is.na(csci$CLASS))
+csci <- left_join(csci, streamClass, by = "comid") ## need stream class for NHD reaches of all bio sites
+sum(is.na(csci$CLASS))
+# 
+# sum(nhdReach$COMID %in% csci$comid) ## 60
 
 ### stream class doesn't match, for now assign it randomly
 dim(csci)
-
-420/8
-sc <- rep(1:8, each=53)
-length(sc)
-sc<- sample(sc[-c(1:4)])
-
-csci <- csci %>%mutate(CLASS = sc)
+# 
+# 420/3
+# sc <- rep(c(3,8,7), each=140)
+# length(sc)
+# sc<- sample(sc)
+# 
+# csci <- csci %>%mutate(CLASS = sc)
 
 # csci[which(csci$COMID==8264738),c("StationCode","COMID","AREA_SQKM","Largest")]
 csci.full<-csci
@@ -97,9 +105,9 @@ csci<-csci.full[csci.full$Largest,]
 
 ## test stream class match
 
-sum(streamClass$comid %in% csci.full$comid) ## only 60 
+sum(streamClass$comid %in% csci.full$comid) ## 305
 
-sum(csci.full$comid %in% streamClass$comid) ## only 68
+sum(csci.full$comid %in% streamClass$comid) ## 387
 
 # Format bio data --------------------------------------------------
 
@@ -146,8 +154,7 @@ samps.sel<-sample_n(csci.t, 1)
 # csci$SelectedSample<-ifelse(csci$SampleID %in% samps.sel$SampleID, "Selected","NotSelected")
 
 
-
-# format flow data --------------------------------------------------------
+# Quantile Random Forest --------------------------------------------------------
 
 head(csci)
 
@@ -167,42 +174,168 @@ rf_full.dat <- csci %>%
   select(-FA_Mag) %>%
   filter(SiteSet=="Cal")
 
+rf_test.dat <- csci %>%
+  # select(-FA_Mag) %>%
+  filter(SiteSet=="Val")
+
 sum(is.na(rf_full.dat))
 
+## remove NAs
 rf_full.dat <- na.omit(rf_full.dat)
+rf_test.dat <- na.omit(rf_test.dat)
 
-rf_full.dat
-# ?quantregForest
+
+## model
 set.seed(10101)
 rf_full<-quantregForest(y=rf_full.dat$csci,
                         x=as.matrix(rf_full.dat[,c(full.vars)]),
                         keep.inbag=T, importance=T,proximity=T)
 
-
-# set.seed(10012)
-# rf_core<-quantregForest(y=csci.rf.dat$CSCI,
-#                         x=as.matrix(csci.rf.dat[,core.candidates]),
-#                         keep.inbag=T, importance=T,proximity=T)
-
-rf_full$importance
-mean(rf_full$rsq)
+cor(rf_full$y, rf_full$predicted) ## 0.4526347
 rf_full$predicted
+rf_full$y
+head(rf_full.dat)
 
-rf_full.dat[, full.vars]
+rf.full.dat.res <- rf_full.dat %>%
+  select(stationcode, comid, CLASS) %>%
+  mutate(Obs = rf_full$y, Pred =  rf_full$predicted)
+
+
+rf.full.dat.res
+
+
+# Observed Vs Predicted ---------------------------------------------------
+
+library(grid)
+# pred1=predict(rf_full,type = "prob")
 
 ### quantiles at cal model sites
+pred_at_mod_sites
 
-pred_at_mod_sites <- predict(rf_full, newdata = rf_full.dat[, full.vars], what=seq(from=0.05, to=.95, by=.05), na.rm=T) %>%
+pred_at_mod_sites <- predict(rf_full, what=seq(from=0.05, to=.95, by=.05), na.rm=T) %>%
   as.data.frame %>%
-  mutate(comid = rf_full.dat$comid)
+  mutate(comid = rf_full.dat$comid, Obs = rf_full.dat$csci, Pred =  rf_full$predicted, CLASS = rf_full.dat$CLASS)
+
+## change names
+names(pred_at_mod_sites) <- c(paste0("core",formatC(as.numeric(seq(from=0.05, to=.95, by=.05)), format = 'f', flag='0', digits = 2)), 'comid', "Obs", "Pred", "CLASS")
+
+## predict on testing data
+pred_at_test <- predict(rf_full, newdata = rf_test.dat[, full.vars], what=seq(from=0.05, to=.95, by=.05), na.rm=T) %>%
+  as.data.frame %>%
+  mutate(comid = rf_test.dat$comid, Obs = rf_test.dat$csci, CLASS = rf_test.dat$CLASS)
+
+## change names
+names(pred_at_test) <- c(paste0("core",formatC(as.numeric(seq(from=0.05, to=.95, by=.05)), format = 'f', flag='0', digits = 2)), 'comid', "Obs", "CLASS")
+
+# cor(rf_test.dat$csci, pred_at_test$`quantile= 0.5`) ## 0.5198202
+
+## training sites: pred from model
+
+## get coefs
+
+Correlation <- round(cor(pred_at_mod_sites$Obs, pred_at_mod_sites$Pred), digits = 2)
+Rsq <- round(mean(rf_full$rsq), digits=2)
+
+# Create a text
+coefs <- grobTree(textGrob(paste0("Cor: ", Correlation, ", Rsq: ", Rsq),x=0.6,  y=0.05, hjust=0,
+                           gp=gpar(col="red", fontsize=13, fontface="italic")))
+
+tr1 <- ggplot(pred_at_mod_sites, aes(x=Pred, y = Obs, color = CLASS)) +
+  geom_point()+
+  scale_x_continuous() +
+  scale_y_continuous() +
+  geom_abline(intercept = 0, slope = 1) +
+  annotation_custom(coefs)
+
+tr1
+
+file.name1 <- paste0(outdir, "obs_v_pred_rf_at_reg_curve_sites.jpg")
+ggsave(tr1, filename=file.name1, dpi=300, height=5, width=6)
+
+## traing sites quantile 0.5 (median)
+
+## get coefs
+
+Correlation <- round(cor(pred_at_mod_sites$Obs, pred_at_mod_sites$core0.50), digits = 2)
+Rsq <- round(mean(rf_full$rsq), digits=2)
+
+# Create a text
+coefs <- grobTree(textGrob(paste0("Cor: ", Correlation, ", Rsq: ", Rsq),x=0.6,  y=0.05, hjust=0,
+                           gp=gpar(col="red", fontsize=13, fontface="italic")))
+
+tr2 <- ggplot(pred_at_mod_sites, aes(x=core0.50, y = Obs, color = CLASS)) +
+  geom_point()+
+  scale_x_continuous() +
+  scale_y_continuous() +
+  geom_abline(intercept = 0, slope = 1) +
+  annotation_custom(coefs)
+
+tr2
+
+file.name1 <- paste0(outdir, "obs_v_pred_rf_at_reg_curve_sites_median_quantile.jpg")
+ggsave(tr2, filename=file.name1, dpi=300, height=5, width=6)
+
+## get coefs
+
+Correlation <- round(cor(pred_at_mod_sites$Obs, pred_at_mod_sites$core0.75), digits = 2)
+Rsq <- round(mean(rf_full$rsq), digits=2)
+
+# Create a text
+coefs <- grobTree(textGrob(paste0("Cor: ", Correlation, ", Rsq: ", Rsq),x=0.6,  y=0.05, hjust=0,
+                           gp=gpar(col="red", fontsize=13, fontface="italic")))
+
+tr3 <- ggplot(pred_at_mod_sites, aes(x=core0.75, y = Obs, color = CLASS)) +
+  geom_point()+
+  scale_x_continuous() +
+  scale_y_continuous() +
+  geom_abline(intercept = 0, slope = 1) +
+  annotation_custom(coefs)
+
+tr3
+
+file.name1 <- paste0(outdir, "obs_v_pred_rf_at_reg_curve_sites_0.75_quantile.jpg")
+ggsave(tr3, filename=file.name1, dpi=300, height=5, width=6)
+
+## testing sites: median quantile
+
+## get coefs
+
+Correlation <- round(cor(pred_at_test$Obs, pred_at_test$core0.50), digits = 2)
+Rsq <- round(mean(rf_full$rsq), digits=2)
+
+# Create a text
+coefs <- grobTree(textGrob(paste0("Cor: ", Correlation, ", Rsq: ", Rsq),x=0.6,  y=0.05, hjust=0,
+                           gp=gpar(col="red", fontsize=13, fontface="italic")))
 
 
+head(pred_at_test)
 
-names(pred_at_mod_sites) <- c(paste0("core",formatC(as.numeric(seq(from=0.05, to=.95, by=.05)), format = 'f', flag='0', digits = 2)), 'comid')
+te1 <- ggplot(pred_at_test, aes(x=core0.50, y = Obs, color = CLASS)) +
+  geom_point()+
+  scale_x_continuous() +
+  scale_y_continuous() +
+  geom_abline(intercept = 0, slope = 1)  +
+  annotation_custom(coefs)
+
+te1
+
+file.name1 <- paste0(outdir, "obs_v_pred_rf_at_test_sites.jpg")
+ggsave(te1, filename=file.name1, dpi=300, height=5, width=6)
+
+# cor(pred_at_mod_sites$`quantile= 0.5`, rf_full$y) ## 0.9226458
+# cor(pred_at_mod_sites$`quantile= 0.75`, rf_full$y) ## 0.8528288
+# cor(pred_at_mod_sites$`quantile= 0.9`, rf_full$y) ## 0.6550466
+# cor(pred_at_mod_sites$`quantile= 0.1`, rf_full$y) ## 0.6857495
+# cor(pred_at_mod_sites$`quantile= 0.95`, rf_full$y) ## 0.5595889
+# cor(pred_at_mod_sites$`quantile= 0.05`, rf_full$y) ## 0.5758296
+
 
 spat <- pred_at_mod_sites ## needs geometry
 pred_at_mod_sites 
-######
+
+
+# Extrapolate to RB9 NHDs -------------------------------------------------
+
 # get model predictions, have to separate calibration oob from statewide
 
 ## format delta h. median per comid and metric, take only current conditions, make wide
@@ -213,13 +346,15 @@ delta <- delta %>%
   summarise(MedDelta = median(DeltaH)) %>%
   pivot_wider(names_from = hydro.endpoints, values_from = MedDelta)
 
-# core model
+delta
 
 # prediction data w/o calibration dataset
 newdatcr <- delta %>%
   filter(!comid %in% rf_full.dat$comid) %>%
   # select_(.dots = c('comid', core.candidates)) %>%
   na.omit
+
+head(newdatcr)
 
 # out of bag predictions for calibration dataset
 # estimates for same comid must be averaged with oob estimates
@@ -232,41 +367,38 @@ predcore_oob <- predict(rf_full, what=seq(from=0.05, to=.95, by=.05), na.rm=T) %
   spread(var, val) %>%
   .[, c(2:20, 1)]
 
-dim(predcore_oob)## 259 n calibration sites
+dim(predcore_oob)## 221 n calibration sites
 head(predcore_oob)
-newdatcr
+
+## predict on nhd data
 predcore_all <- predict(rf_full, newdata = newdatcr[, -1], what=seq(from=0.05, to=.95, by=.05), na.rm=T) %>%
   as.data.frame %>%
   mutate(comid = newdatcr$comid)
-
-dim(predcore_all) ## 2079
+## , wayr = newdatcr$wayr
+dim(predcore_all) ## 68442
 str(predcore_all)
-length(unique(comid_prd$comid)) ## 2079
+length(unique(comid_prd$comid)) ## 2295
 
 # join calibration oob with statewide
 predcore <- bind_rows(predcore_oob, predcore_all)
 head(predcore)
-dim(predcore) ## 2329
+dim(predcore) ## 68663
 names(predcore) <- c(paste0("core",formatC(as.numeric(seq(from=0.05, to=.95, by=.05)), format = 'f', flag='0', digits = 2)), 'comid')
 
 pred_all <- predcore
-
-# pred_all <- predcore %>%
-#   left_join(predfull, by = 'COMID') %>%
-#   left_join(all.comid[,c("COMID", core.candidates, setdiff(full.vars,core.candidates))], by = 'COMID') %>%
-#   as.data.frame
 
 pred_all$DevData<-
   ifelse(pred_all$comid %in% csci$comid[which(csci$SiteSet=="Cal")],"Cal",
          ifelse(pred_all$comid %in% csci$comid[which(csci$SiteSet=="Val")],"Val","No"))
 
+head(pred_all)
+
 comid_prd <- pred_all
-comid_prd ## 2329
+comid_prd ## 68,663
+
 # csci data for comparison with stream comid
 csci_comid <- csci
-spat
-##
-csci_comid
+
 # save all
 save(spat, file = 'output_data/02_spat.RData', compress = 'xz')
 save(csci_comid, file = 'output_data/02_csci_comid.RData', compress = 'xz')

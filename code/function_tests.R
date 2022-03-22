@@ -11,8 +11,9 @@ function(datin, thrsh = 0.79, tails = 0.05, modls = c('core', 'full'), lbs = lis
   modls <- match.arg(modls)
   modls
   match.arg
-  dat <- spat
+  dat <- calinhd
   st_geometry(dat) <- NULL
+  dat
   dat <- dat %>% 
     dplyr::select(matches(paste0('^COMID$|^', modls, '0'))) %>% 
     gather('var', 'val', -COMID) %>% 
@@ -48,7 +49,7 @@ function(datin, thrsh = 0.79, tails = 0.05, modls = c('core', 'full'), lbs = lis
         
       })
       
-    ) %>% 
+    )# %>% 
     dplyr::select(-data) %>% 
     unnest 
   
@@ -59,7 +60,7 @@ function(datin, thrsh = 0.79, tails = 0.05, modls = c('core', 'full'), lbs = lis
     match(unlist(lbs)) %>% 
     lbs[.] %>% 
     .[names(sort(unlist(.)))]
-  
+  lbs
   # strcls as correct factor levels
   dat <- dat %>%
     mutate(strcls = factor(strcls_int, levels = unlist(lbs), labels = names(lbs)))
