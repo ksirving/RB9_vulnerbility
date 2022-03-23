@@ -237,10 +237,10 @@ Tally0x <- Tally0 %>%
 Tally0x
 unique(Tally0x$CombCode)
 
-###################
+
 ## NONE!!!!
 ## only relationship good is 0.92 which isn't in the med alteration range
-#################
+
 
 Tally0 <- Year_Tally %>%
   filter(Biol %in% c("CSCI"), hydro.endpoint == "FA_Mag")
@@ -364,7 +364,7 @@ head(Tally0)
 
 
 ASCI1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 40, ymax = 60, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 1994, xmax = 2018,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Dry Season Baseflow High", x = "Year", y = "Altered Subbasins (%)") + 
@@ -392,9 +392,9 @@ Tally0x <- Tally0 %>%
 Tally0x
 unique(Tally0x$CombCode)
 
-###################
+
 ## 0.75_Threshold25 
-#################
+
 
 Tally0 <- Year_Tally %>%
   filter(Biol %in% c("ASCI"), hydro.endpoint == "FA_Mag")
@@ -550,3 +550,156 @@ delta_dfx_sub <- metric_tally_current%>%
 unique(delta_dfx_sub$threshCode)
 
 write.csv(delta_dfx_sub, "ignore/04_metric_suitability_tally_condensed_all_sites_current.csv")
+
+
+# Alteration criteria ----------------------------------------------------------------
+
+head(delta_dfx_sub)
+
+library(sf)
+library(raster)
+library(maptools)
+library(rgdal)
+
+## projection
+prj <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+
+### upload RB9 nhds
+
+calinhd <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment - General/Data/SpatialData/NHDplus_RB9.shp') %>%
+  spTransform(prj) %>%
+  st_as_sf %>%
+  st_simplify(dTolerance = 0.5, preserveTopology = T)
+unique(calinhd$COMID)
+unique(delta_dfx_sub$comid)
+
+## join delta and reaches by comid
+
+
+
+# fortified calinhd, joind with delta
+nhdplo <- calinhd %>%
+  filter(COMID %in% unique(suit_data$COMID)) %>%
+  dplyr::select(COMID) %>% ## 46
+  as('Spatial')
+
+
+comidid <- nhdplo@data %>%
+  dplyr::select(COMID) %>%
+  rownames_to_column('id')
+
+nhdplo <- nhdplo %>%
+  fortify %>%
+  left_join(comidid, by = 'id') %>%
+  inner_join(suit_data, by = 'COMID')
+
+nhdplo
+
+## set metric alteration based on time altered
+# if >50% time Altered, altered
+
+## change names
+suit_data <- delta_dfx_sub %>%
+  rename(COMID = comid)
+
+dim(suit_data_50)
+suit_data_50 <- suit_data %>%
+  mutate(alteration_50pct_time = ifelse(Altered > 50, "Altered", "Unaltered")) %>%
+  distinct()
+  
+
+head(suit_data_50)
+
+#write.csv table of altered metrics per subbasin and bio/threshold
+write.csv(suit_data_50, file = "output_data/04_altered_metric_per_nhd_reach.csv")
+
+names(suit_data_50)
+# aggregate by site, Biol, Threshold, alteration_50pct_time, get a count of n of altered and unaltered metrics for each
+subset.50pct.time <- suit_data_50 %>% 
+  group_by(COMID, Biol, Threshold, alteration_50pct_time) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  data.frame()
+
+subset.50pct.time
+
+# if 1-2 metric altered, bio index is considered altered
+# if number altered > 1 --> class it as overall altered
+subset.50pct.time$overall.altered.2metric <- NA #create a new column as NA
+
+# if >=1 metric altered, save as altered, all others unaltered, then any unaltered with 1 metric also altered
+subset.50pct.time <- subset.50pct.time %>%
+  mutate(overall.altered.2metric = ifelse(alteration_50pct_time == "Altered" & subset.50pct.time$n >= 1, "Altered", "Unaltered")) %>%
+  mutate(overall.altered.2metric = ifelse(alteration_50pct_time == "Unaltered" & subset.50pct.time$n == 1, "Altered", overall.altered.2metric)) 
+
+# save csv in output_data
+file.name <- "output_data/04_summary.50pct.time.altered.2metrics.Current.csv"
+write.csv(subset.50pct.time, file=file.name, row.names = FALSE)
+
+subset.50pct.time
+####################################
+## Summarize overall alteration across SOC
+# number of altered and unaltered subbasins, percent of total subbasins using these thresholds
+
+# find length of unique sites
+site.length <- length(unique(subset.50pct.time$COMID))
+site.length
+
+##### something is wrong here!!!!!
+# summarize (count and %) of total subbasin in overall alteration categories
+subset.50pct.time.summary2 <- subset.50pct.time %>% 
+  group_by(Biol, Threshold, overall.altered.2metric) %>% 
+  tally() #%>% 
+  ungroup() %>% 
+  na.omit() %>% 
+  mutate(pct.2metric = 100*n/site.length) %>% 
+  data.frame()
+
+subset.50pct.time.summary2
+
+# Biol   Threshold overall.altered.2metric    n pct.2metric
+# 1 ASCI Threshold25                 Altered 2324   109.82987
+# 2 ASCI Threshold25               Unaltered  609    28.78072
+# 3 CSCI Threshold75                 Altered 2574   121.64461
+# 4 CSCI Threshold75               Unaltered  622    29.39509
+
+############################################################
+## Create overall prioritization based on bio-relevant alteration of CSCI and ASCI
+# if both altered, high priority; if one altered, medium priority; if unaltered, low priority
+
+# remove NA values
+subset.50pct.time.all2 <- na.omit(subset.50pct.time)
+
+# tally number of biol indices (csci/asci) altered per site
+subset.50pct.time.summary2.all <- subset.50pct.time.all2 %>% 
+  group_by(New_Name,  overall.altered.2metric) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  na.omit()  
+
+# save as overall.summary
+overall.summary <- data.frame(subset.50pct.time.summary2.all)
+
+# create new column for synthesis alteration, blank with NA values
+overall.summary$synthesis_alteration <- NA
+# designation prioritization categories
+# if 2 bio indices altered, high priority
+overall.summary$synthesis_alteration[which(overall.summary$overall.altered.2metric == "Altered" & overall.summary$n == 2)] <- "High Priority" 
+# if one is unaltered, medium
+overall.summary$synthesis_alteration[which(overall.summary$overall.altered.2metric == "Unaltered" & overall.summary$n == 1)] <- "Medium Priority" 
+# if 2 bio indices unaltered, high priority
+overall.summary$synthesis_alteration[which(overall.summary$overall.altered.2metric == "Unaltered" & overall.summary$n == 2)] <- "Low Priority" 
+
+# remove NA rows (duplicate rows)
+synthesis.summary <- na.omit(overall.summary)
+
+#summary
+synthesis.summary.table <- synthesis.summary %>% 
+  na.omit()  %>% 
+  group_by(synthesis_alteration) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  mutate(pct.2metric = 100*n/60) 
+synthesis.summary.table <- data.frame(synthesis.summary.table)
+
+
