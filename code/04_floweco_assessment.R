@@ -479,6 +479,46 @@ unique(Tally0x$CombCode)
 #  0.75_Threshold25 DS_Mag_50             73.3          75.4
 #  0.94_Threshold25 DS_Mag_50             73.7          76.8
 
+Tally0 <- Year_Tally %>%
+  filter(Biol %in% c("ASCI"), hydro.endpoint == "Wet_BFL_Mag_10")
+
+head(Tally0)
+
+
+ASCI1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
+           alpha = .2) +
+  geom_smooth(method = "loess", se = FALSE ) +
+  labs(title = "Wet Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
+  theme(text = element_text(size=10)) +
+  scale_y_continuous(limits = c(0, 100)) +
+  scale_colour_discrete(name  ="ASCI Theshold") +
+  scale_linetype_discrete(name  ="Probability Threshold",
+                          breaks=c("Threshold25", "Threshold50", "Threshold75"),
+                          labels=c("0.25", "0.50", "0.75"))
+
+
+ASCI1
+
+out.filename <- paste0(out.dir,"ASCI_Wet_BFL_Mag_10_Alt_over_time.jpg")
+ggsave(ASCI1, file = out.filename, dpi=300, height=4, width=6)
+
+## find metrics within limits
+
+Tally0x <- Tally0 %>%
+  group_by(CombCode,  hydro.endpoint) %>%
+  summarise(AlteredMean = mean(Altered), AlteredMedian = median(Altered)) %>%
+  filter(AlteredMean > 25 & AlteredMean < 75)
+Tally0x
+unique(Tally0x$CombCode)
+
+# 1 0.75_Threshold25 Wet_BFL_Mag_10        45.4          44.7
+# 2 0.75_Threshold50 Wet_BFL_Mag_10        56.7          54.0
+# 3 0.75_Threshold75 Wet_BFL_Mag_10        72.9          68.9
+# 4 0.86_Threshold25 Wet_BFL_Mag_10        62.4          59.1
+# 5 0.94_Threshold25 Wet_BFL_Mag_10        59.3          57.6
+# 6 0.94_Threshold50 Wet_BFL_Mag_10        74.7          72.5
+
 # Format data for map -----------------------------------------------
 
 unique(Year_Tally$hydro.endpoint)
