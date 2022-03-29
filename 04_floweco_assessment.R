@@ -34,11 +34,12 @@ limits
 head(limits)
 ## clean up df, make longer
 limits <- limits %>%
-  select(-X.1, -X, -n) %>%
+  dplyr::select(-X.1, -X, -n) %>%
   # rename(hydro.endpoint = Hydro_endpoint) %>% 
-  mutate(metric = paste0(Bio_endpoint, "_", Hydro_endpoint, "_", Bio_threshold)) %>%
+  mutate(metric = paste0(Biol, "_", Hydro_endpoint, "_", Bio_threshold)) %>%
   pivot_longer(Threshold25:Threshold75, names_to = "Threshold") %>%
   rename(DeltaH = value) 
+
 
 ## make wider with type - pos/neg
 limits <- limits %>%
@@ -50,12 +51,12 @@ limits <- left_join(limits, labels, by = "Hydro_endpoint")
 
 unique(limits$metric)
 
-bad_rels <- c("H_ASCI_FA_Mag_0.75_Positive", "H_ASCI_FA_Mag_0.86_Positive", "H_ASCI_FA_Mag_0.94_Positive",
-              "H_ASCI_FA_Mag_0.75_Negative", "H_ASCI_FA_Mag_0.86_Negative", "H_ASCI_FA_Mag_0.94_Negative", 
-              "CSCI_DS_Mag_50_0.63_Positive", "CSCI_DS_Mag_50_0.63_Negative", "CSCI_DS_Mag_50_0.79_Positive", 
-              "CSCI_DS_Mag_50_0.79_Negative", "CSCI_FA_Mag_0.79_Positive", "CSCI_FA_Mag_0.79_Negative", 
-              "CSCI_FA_Mag_0.92_Positive", "CSCI_FA_Mag_0.92_Negative", "CSCI_Wet_BFL_Mag_50_0.79_Negative", 
-              "CSCI_Wet_BFL_Mag_50_0.79_Positive")
+bad_rels <- c("ASCI_FA_Mag_0.75", "ASCI_FA_Mag_0.86", "ASCI_FA_Mag_0.94",
+              "ASCI_FA_Mag_0.75", "ASCI_FA_Mag_0.86", "ASCI_FA_Mag_0.94", 
+              "CSCI_DS_Mag_50_0.63", "CSCI_DS_Mag_50_0.63", "CSCI_DS_Mag_50_0.79", 
+              "CSCI_DS_Mag_50_0.79", "CSCI_FA_Mag_0.79", "CSCI_FA_Mag_0.79", 
+              "CSCI_FA_Mag_0.92", "CSCI_FA_Mag_0.92", "CSCI_Wet_BFL_Mag_50_0.79", 
+              "CSCI_Wet_BFL_Mag_50_0.79")
 
 limits <- limits %>%
   filter(!metric %in% bad_rels)
@@ -143,12 +144,19 @@ delta_long <- delta_long %>%
                                      # FlowMetric == "sp_mag" ~ "SP_Mag",
                                      FlowMetric == "d_wet_bfl_mag_10" ~ "Wet_BFL_Mag_10",
                                      FlowMetric == "d_wet_bfl_mag_50" ~ "Wet_BFL_Mag_50",)) 
+names(delta_long)
+## get median delta H 
 
+delta_med <- delta_long %>%
+  group_by(comid, FlowMetric, hydro.endpoint) %>%
+  summarise(MedDelta = median(DeltaH))
+
+head(delta_med)
 
 # Join limits with delta H RB9 --------------------------------------------
 
 limits <- limits  %>%
-  # select(-X.1, -X) %>%
+  # dplyr::select(-X.1, -X) %>%
   rename(hydro.endpoint = Hydro_endpoint)
 
 ## join limits with delta data
@@ -157,7 +165,7 @@ head(delta_df)
 
 ## define alteration per subbasin, per year - within limits
 delta_dfx <- delta_df %>%
-  group_by(comid, comid_wy, wayr, hydro.endpoint, Bio_endpoint,Bio_threshold, Threshold) %>%
+  group_by(comid,comid_wy, wayr,  hydro.endpoint, Bio_endpoint,Bio_threshold, Threshold) %>%
   mutate(Alteration = ifelse(DeltaH <= Positive & DeltaH >= Negative, "Unaltered", "Altered")) 
 
 write.csv(delta_dfx, "ignore/04_alteration_by_year_comid_all_sites.csv")
@@ -170,11 +178,11 @@ unique(delta_dfx$Biol)
 ## get number and percentage of sites per year altered and combination code
 
 Year_Tally <- delta_dfx %>%
-  select(comid, comid_wy, wayr, hydro.endpoint, Biol ,Bio_threshold, Threshold, Alteration) %>%
+  dplyr::select(comid, comid_wy, wayr, hydro.endpoint, Biol ,Bio_threshold, Threshold, Alteration) %>%
   mutate(CombCode = paste0(Bio_threshold, "_", Threshold )) %>%
   group_by(wayr, hydro.endpoint, Biol, Bio_threshold, Threshold, CombCode) %>%
   count(Alteration) %>%
-  mutate(Percentage = n/sum(n)*100) %>%  select(-n) %>%
+  mutate(Percentage = n/sum(n)*100) %>%  dplyr::select(-n) %>%
   pivot_wider(names_from = Alteration, values_from = Percentage)
 
 view(Year_Tally)
@@ -468,48 +476,6 @@ unique(Tally0x$CombCode)
 
 #  0.75_Threshold25 DS_Mag_50             73.3          75.4
 #  0.94_Threshold25 DS_Mag_50             73.7          76.8
-##############
-## find metrics within limits
-
-
-
-Tally0 <- Year_Tally %>%
-  filter(Biol %in% c("ASCI"), hydro.endpoint == "Wet_BFL_Mag_10" )
-
-head(Tally0)
-
-ASCI2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 25, ymax = 75, xmin = 1994, xmax = 2018,
-           alpha = .2) +
-  geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Wet Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
-  theme(text = element_text(size=10)) +
-  scale_y_continuous(limits = c(0,100)) +
-  scale_colour_discrete(name  ="ASCI Theshold") +
-  scale_linetype_discrete(name  ="Probability Threshold",
-                          breaks=c("Threshold25", "Threshold50", "Threshold75"),
-                          labels=c("0.25", "0.50", "0.75"))
-
-ASCI2
-
-out.filename <- paste0(out.dir,"ASCI_WS_baseflow_10_Alt_over_time.jpg")
-ggsave(ASCI2, file = out.filename, dpi=300, height=4, width=6)
-
-## find metrics within limits
-
-Tally0x <- Tally0 %>%
-  group_by(CombCode) %>%
-  summarise(AlteredMean = mean(Altered), AlteredMedian = median(Altered)) %>%
-  filter(AlteredMean > 40 & AlteredMean < 60)
-Tally0x
-unique(Tally0x$CombCode) 
-
-###   CombCode         AlteredMean AlteredMedian
-#   1 0.75_Threshold25        45.4          44.7
-# 2 0.75_Threshold50        56.7          54.0
-# 3 0.94_Threshold25        59.3          57.6
-
-## 0.75_Threshold25  
 
 # Format data for map -----------------------------------------------
 
@@ -518,30 +484,44 @@ unique(Year_Tally$hydro.endpoint)
 # CSCI -  0.79_Threshold75 (DS_Mag_90, Wet_BFL_Mag_10)
 # ASCI - 0.75_Threshold25 (DS_Mag_90, Wet_BFL_Mag_10)
 
-head(delta_dfx_sub)
+# head(delta_dfx_sub)
+head(delta_med)
+
+## join limits with delta data median
+delta_df <- left_join(delta_med, limits, by="hydro.endpoint")
+head(delta_df)
+
+## define alteration per subbasin, per year - within limits
+delta_dfx <- delta_df %>%
+  group_by(comid,  hydro.endpoint, Bio_endpoint,Bio_threshold, Threshold) %>%
+  mutate(Alteration = ifelse(MedDelta <= Positive & MedDelta >= Negative, "Unaltered", "Altered")) 
+
+write.csv(delta_dfx, "ignore/04_alteration_by_median_comid_all_sites.csv")
+
+head(delta_dfx)
 
 ## count alteration by site from main delta df
-metric_tally_current <- delta_dfx %>%
-  group_by(comid, hydro.endpoint, Biol, Threshold, Bio_threshold) %>%
-  count(Alteration)
-
-metric_tally_current <- na.omit(metric_tally_current)
-metric_tally_current
+# metric_tally_current <- delta_dfx %>%
+#   group_by(comid, hydro.endpoint, Biol, Threshold, Bio_threshold) %>%
+#   count(Alteration)
+# 
+# metric_tally_current <- na.omit(metric_tally_current)
+# metric_tally_current
 
 
 ## make %
-metric_tally_current <- metric_tally_current %>%
-  group_by(comid, hydro.endpoint, Biol, Threshold, Bio_threshold) %>%
-  mutate(Percentage = n/sum(n)*100, YearsWithData = sum(n)) %>%
-  select(-n) %>%
-  pivot_wider(names_from = Alteration, values_from = Percentage)
-
-metric_tally_current
+# metric_tally_current <- metric_tally_current %>%
+#   group_by(comid, hydro.endpoint, Biol, Threshold, Bio_threshold) %>%
+#   mutate(Percentage = n/sum(n)*100, YearsWithData = sum(n)) %>%
+#   select(-n) %>%
+#   pivot_wider(names_from = Alteration, values_from = Percentage)
+# 
+# metric_tally_current %>%   tally() 
 
 ## replace NAs with zero - as 100% in other category
-metric_tally_current[is.na(metric_tally_current)] <- 0
+# metric_tally_current[is.na(metric_tally_current)] <- 0
 
-delta_dfx_sub <- metric_tally_current%>%
+delta_dfx_sub <- delta_dfx %>%
   filter(hydro.endpoint %in% c("DS_Mag_90", "Wet_BFL_Mag_10"), 
          Bio_threshold %in% c(0.79, 0.75)) %>%
   mutate(threshCode = paste(Bio_threshold, Threshold, sep= "_")) %>%
@@ -554,6 +534,8 @@ write.csv(delta_dfx_sub, "ignore/04_metric_suitability_tally_condensed_all_sites
 
 # Alteration criteria ----------------------------------------------------------------
 
+delta_dfx_sub <- read.csv("ignore/04_metric_suitability_tally_condensed_all_sites_current.csv")
+
 head(delta_dfx_sub)
 
 library(sf)
@@ -564,59 +546,29 @@ library(rgdal)
 ## projection
 prj <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
-### upload RB9 nhds
-
-calinhd <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment - General/Data/SpatialData/NHDplus_RB9.shp') %>%
-  spTransform(prj) %>%
-  st_as_sf %>%
-  st_simplify(dTolerance = 0.5, preserveTopology = T)
-unique(calinhd$COMID)
-unique(delta_dfx_sub$comid)
-
-## join delta and reaches by comid
-
-
-
-# fortified calinhd, joind with delta
-nhdplo <- calinhd %>%
-  filter(COMID %in% unique(suit_data$COMID)) %>%
-  dplyr::select(COMID) %>% ## 46
-  as('Spatial')
-
-
-comidid <- nhdplo@data %>%
-  dplyr::select(COMID) %>%
-  rownames_to_column('id')
-
-nhdplo <- nhdplo %>%
-  fortify %>%
-  left_join(comidid, by = 'id') %>%
-  inner_join(suit_data, by = 'COMID')
-
-nhdplo
-
-## set metric alteration based on time altered
-# if >50% time Altered, altered
+## set metric alteration based on median alteration
+#  if 1 or 2 metrics altered then bio is altered
+# if both bio altered = altered, of 1 bio altered = partially altered, if 0 bio altered = unaltered
 
 ## change names
 suit_data <- delta_dfx_sub %>%
   rename(COMID = comid)
-
-dim(suit_data_50)
-suit_data_50 <- suit_data %>%
-  mutate(alteration_50pct_time = ifelse(Altered > 50, "Altered", "Unaltered")) %>%
-  distinct()
-  
+head(suit_data)
+# dim(suit_data_alt)
+# suit_data_alt <- suit_data %>%
+#   mutate(alteration_50pct_alt = ifelse(Altered == "Altered", "Altered", "Unaltered")) %>%
+#   distinct()
+#   
 
 head(suit_data_50)
 
 #write.csv table of altered metrics per subbasin and bio/threshold
-write.csv(suit_data_50, file = "output_data/04_altered_metric_per_nhd_reach.csv")
+# write.csv(suit_data_50, file = "output_data/04_altered_metric_per_nhd_reach.csv")
 
 names(suit_data_50)
 # aggregate by site, Biol, Threshold, alteration_50pct_time, get a count of n of altered and unaltered metrics for each
-subset.50pct.time <- suit_data_50 %>% 
-  group_by(COMID, Biol, Threshold, alteration_50pct_time) %>% 
+subset.50pct.time <- suit_data %>% 
+  group_by(COMID, Biol, Threshold, Alteration) %>% 
   tally() %>% 
   ungroup() %>% 
   data.frame()
@@ -629,16 +581,23 @@ subset.50pct.time$overall.altered.2metric <- NA #create a new column as NA
 
 # if >=1 metric altered, save as altered, all others unaltered, then any unaltered with 1 metric also altered
 subset.50pct.time <- subset.50pct.time %>%
-  mutate(overall.altered.2metric = ifelse(alteration_50pct_time == "Altered" & subset.50pct.time$n >= 1, "Altered", "Unaltered")) %>%
-  mutate(overall.altered.2metric = ifelse(alteration_50pct_time == "Unaltered" & subset.50pct.time$n == 1, "Altered", overall.altered.2metric)) 
+  mutate(overall.altered.2metric = ifelse(Alteration == "Altered" & n >= 1, "Altered", "Unaltered")) %>%
+  mutate(overall.altered.2metric = ifelse(overall.altered.2metric == "Unaltered" & n == 1, "Altered", overall.altered.2metric)) %>%
+  dplyr::select(-Alteration) %>%
+  distinct()
 
 # save csv in output_data
 file.name <- "output_data/04_summary.50pct.time.altered.2metrics.Current.csv"
 write.csv(subset.50pct.time, file=file.name, row.names = FALSE)
 
 subset.50pct.time
-####################################
-## Summarize overall alteration across SOC
+
+# remove NA rows (duplicate rows) and remove calulation columns
+separate.summary <- subset.50pct.time %>%
+  na.omit() %>%
+  dplyr::select(-Threshold, -n)
+
+## Summarize overall alteration across rb9
 # number of altered and unaltered subbasins, percent of total subbasins using these thresholds
 
 # find length of unique sites
@@ -649,7 +608,7 @@ site.length
 # summarize (count and %) of total subbasin in overall alteration categories
 subset.50pct.time.summary2 <- subset.50pct.time %>% 
   group_by(Biol, Threshold, overall.altered.2metric) %>% 
-  tally() #%>% 
+  tally() %>% 
   ungroup() %>% 
   na.omit() %>% 
   mutate(pct.2metric = 100*n/site.length) %>% 
@@ -658,12 +617,14 @@ subset.50pct.time.summary2 <- subset.50pct.time %>%
 subset.50pct.time.summary2
 
 # Biol   Threshold overall.altered.2metric    n pct.2metric
-# 1 ASCI Threshold25                 Altered 2324   109.82987
-# 2 ASCI Threshold25               Unaltered  609    28.78072
-# 3 CSCI Threshold75                 Altered 2574   121.64461
-# 4 CSCI Threshold75               Unaltered  622    29.39509
+# 1 ASCI Threshold25                 Altered 1461    69.04537
+# 2 ASCI Threshold25               Unaltered  655    30.95463
+# 3 CSCI Threshold75                 Altered 1368    64.65028
+# 4 CSCI Threshold75               Unaltered  748    35.34972
 
-############################################################
+
+# Overall synthesis -------------------------------------------------------
+
 ## Create overall prioritization based on bio-relevant alteration of CSCI and ASCI
 # if both altered, high priority; if one altered, medium priority; if unaltered, low priority
 
@@ -672,14 +633,14 @@ subset.50pct.time.all2 <- na.omit(subset.50pct.time)
 
 # tally number of biol indices (csci/asci) altered per site
 subset.50pct.time.summary2.all <- subset.50pct.time.all2 %>% 
-  group_by(New_Name,  overall.altered.2metric) %>% 
+  group_by(COMID,  overall.altered.2metric) %>% 
   tally() %>% 
   ungroup() %>% 
   na.omit()  
 
 # save as overall.summary
 overall.summary <- data.frame(subset.50pct.time.summary2.all)
-
+overall.summary
 # create new column for synthesis alteration, blank with NA values
 overall.summary$synthesis_alteration <- NA
 # designation prioritization categories
@@ -687,19 +648,242 @@ overall.summary$synthesis_alteration <- NA
 overall.summary$synthesis_alteration[which(overall.summary$overall.altered.2metric == "Altered" & overall.summary$n == 2)] <- "High Priority" 
 # if one is unaltered, medium
 overall.summary$synthesis_alteration[which(overall.summary$overall.altered.2metric == "Unaltered" & overall.summary$n == 1)] <- "Medium Priority" 
-# if 2 bio indices unaltered, high priority
+# if 2 bio indices unaltered, low priority
 overall.summary$synthesis_alteration[which(overall.summary$overall.altered.2metric == "Unaltered" & overall.summary$n == 2)] <- "Low Priority" 
 
-# remove NA rows (duplicate rows)
-synthesis.summary <- na.omit(overall.summary)
+# remove NA rows (duplicate rows) and remove calulation columns
+synthesis.summary <- overall.summary %>%
+  na.omit() %>%
+  dplyr::select(-overall.altered.2metric, -n)
 
+dim(synthesis.summary)
 #summary
 synthesis.summary.table <- synthesis.summary %>% 
   na.omit()  %>% 
   group_by(synthesis_alteration) %>% 
   tally() %>% 
   ungroup() %>% 
-  mutate(pct.2metric = 100*n/60) 
+  mutate(pct.2metric = 100*n/sum(n)) 
+
 synthesis.summary.table <- data.frame(synthesis.summary.table)
+synthesis.summary.table
+
+
+# Maps --------------------------------------------------------------------
+install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
+
+library(spDataLarge)
+library(readxl)
+library(sf)
+library(ggsn)
+library(ggmap)
+library(ggspatial)
+library(spData)      
+library(geosphere)
+library(rgeos)
+### upload RB9 nhds
+
+calinhd <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment - General/Data/SpatialData/NHDplus_RB9.shp') %>%
+  spTransform(prj) %>%
+  st_as_sf %>%
+  st_simplify(dTolerance = 0.5, preserveTopology = T)
+unique(calinhd$COMID)
+unique(overall.summary$COMID)
+
+
+## synthesis map
+
+# fortified calinhd, joind with delta
+# merge synthesis.summary with basins to get spatial data
+SynthNHD <- calinhd %>%
+  filter(COMID %in% unique(synthesis.summary$COMID)) %>%
+  dplyr::select(COMID) %>% ## 46
+  as('Spatial') %>% 
+  st_as_sf(coords = c("long", "lat"), remove = FALSE)
+
+nhdplo <- SynthNHD %>%
+  fortify %>%
+  # left_join(comidid, by = 'id') %>%
+  full_join(synthesis.summary, by = 'COMID')
+
+
+# colors and labels for suitability categories - used for legend and maps
+colors <- c("#ca0020", "#fdae61","#0571b0", "white")
+priority <- c("High Priority",  "Medium Priority","Low Priority", NA)
+categories <- c("High (Alteration: CSCI & ASCI)", "Medium (Alteration: CSCI or ASCI)","Low (Alteration: None)","Not evaluated")
+
+# lookup table for colors and categories for legend and maps
+lookup <- data.frame(cbind(colors, priority, categories))
+
+## plot
+# Set up base map 
+
+study <- ggplot(SynthNHD) + 
+  labs(title="Current Condition", subtitle = "Based on Biologically-Relevant Flow Alteration",x ="", y = "")  + 
+  geom_sf(color = "lightgrey", fill="white") +
+  annotation_scale() +
+  annotation_north_arrow(pad_y = unit(0.9, "cm"),  height = unit(.8, "cm"),
+                         width = unit(.8, "cm")) +
+  theme(panel.background = element_rect(fill = "white"),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid = element_line(color = "white", size = 0.8)) 
+
+# print basemap
+study
+
+## subset lookup categories and tables
+lookup.sub <- lookup[lookup$priority %in% unique(nhdplo_sf$synthesis_alteration),]
+
+# save as factor for legend ordering
+lookup.sub$priority <- factor(lookup.sub$priority, levels = unique(lookup.sub$priority))
+nhdplo$synthesis_alteration <- factor(nhdplo$synthesis_alteration, levels = unique(lookup.sub$priority))
+
+# synthesis map for bio index z
+syn.plot <- study + geom_sf(data = nhdplo, aes(color=synthesis_alteration, geometry = geometry)) +
+  scale_color_manual(name = "Condition based on Biologic Flow Alteration", labels = lookup.sub$categories, values=lookup.sub$colors) 
+
+# print map
+print(syn.plot)
+
+# write plot
+out.filename <- "figures/maps/04_Synthesis_Prioritization_map_RB9_Current.jpg"
+ggsave(syn.plot, file = out.filename, dpi=500, height=6, width=8)
+
+# CSCI & ASCI maps --------------------------------------------------------
+
+separate.summary
+
+## Create bio-relevant flow alteration CSCI and ASCI maps 
+# for appropriate prob and biol threshold combos, altered dependent on mdeian, altered 1 or 2 metrics
+
+# set colors for alteration categories used in legend and maps
+colors <- c("#ca0020", "#0571b0", "white")
+alteration <- c("Altered",  "Unaltered", NA)
+categories <- c("Likely Altered", "Likely Unaltered", "Not evaluated")
+# lookup table used for legend and maps
+lookup <- data.frame(cbind(colors, alteration, categories))
+
+# create title for plot (metric threshold)
+metric.threshold <- "2 Metric Altered Threshold"
+
+# subset to specific columns, rename columns
+subset <- separate.summary %>% 
+  dplyr::select("COMID", "Biol","overall.altered.2metric") %>% 
+  # mutate(COMID = as.character(COMID)) %>% 
+  data.frame() %>% 
+  na.omit()
+
+# update column names
+names(subset) <- c("COMID", "Biol","Alteration - Biology")
+
+## Loop through CSCI and ASCI thresholds
+indices <- c("ASCI", "CSCI")
+
+for(z in indices){
+  #subset either csci or asci
+  subset.index <- subset[subset$Biol == z,]
+  subset.index
+  # set probability threshold label
+  # prob <- "Probability Threshold at 25%"
+  
+  # merge with basins to get spatial data for map
+  subset.join <- subset.index %>% 
+    full_join(SynthNHD, by = c('COMID'))
+  subset.join
+  # set title and subtitle
+  title <- paste0(z)
+  subtitle <- "Biologically-Relevant Flow Alteration"
+  
+  ## Plot
+  # Set up base map 
+  study <- ggplot(SynthNHD) + 
+    geom_sf(color = "lightgrey", fill="white") +
+    labs(title=title, subtitle = subtitle, x ="", y = "")  + 
+    annotation_scale() +
+    annotation_north_arrow(pad_y = unit(0.9, "cm"),  height = unit(.8, "cm"),
+                           width = unit(.8, "cm")) +
+    theme(panel.background = element_rect(fill = "white"),
+          axis.ticks = element_blank(),
+          axis.text = element_blank(),
+          panel.grid = element_line(color = "white", size = 0.8),
+          plot.title = element_text(size=20)) 
+  #print map
+  study
+  
+  # subset lookup categories and tables
+  lookup.sub <- lookup[lookup$alteration %in% unique(subset.join$`Alteration - Biology`),]
+  
+  # save as factor to sort categories in legend
+  lookup.sub$alteration <- factor(lookup.sub$alteration, levels = unique(lookup.sub$alteration))
+  subset.join$`Alteration - Biology` <- factor(subset.join$`Alteration - Biology`, levels = unique(lookup.sub$alteration))
+  
+  
+  # synthesis map for bio index z
+  syn.plot <- study + geom_sf(data = subset.join, aes(color=`Alteration - Biology`, geometry = geometry)) +
+    scale_color_manual(name = "Biologic Flow Alteration", labels = lookup.sub$categories, values=lookup.sub$colors) 
+  
+  # print
+  print(syn.plot)
+  
+  # write plot
+  out.filename <- paste0("figures/maps/04_", z, "_alteration_map_RB9_Current.jpg")
+  ggsave(syn.plot, file = out.filename, dpi=300, height=4, width=6)
+  
+}
+
+
+# rename Alteration categories - Bio to likely unaltered and likely altered categories
+subset$`Alteration - Biology` <- gsub("Altered", "Likely Altered", subset$`Alteration - Biology`)
+subset$`Alteration - Biology` <- gsub("Unaltered", "Likely Unaltered", subset$`Alteration - Biology`)
+
+# save the subset summary table with indices, subbasin
+# pivot wider to get hydro.alteration.CSCI and hydro.alteration.ASCI columns
+subset2 <- subset %>% 
+  # select(-c(Probability_Threshold)) %>% 
+  pivot_wider(names_from = Biol, values_from = `Alteration - Biology`) %>% 
+  rename(hydro.alteration.CSCI = CSCI) %>% 
+  rename(hydro.alteration.ASCI = ASCI)
+
+# remove na rows from overall summary
+overall.summary2 <- na.omit(overall.summary)
+
+# combine with overall summary
+summary.csci.asci.synthesis <- subset2 %>% 
+  inner_join(overall.summary2, by = c('COMID')) %>% 
+  dplyr::select(c(names(subset2), "synthesis_alteration"))
+
+# write csv summary for CSCI and ASCI
+file.name.summary <- "output_data/04_RB9_CSCI_ASCI_HydroAlt_Synthesis_Summary_Current.csv"
+write.csv(summary.csci.asci.synthesis, file = file.name.summary)
+
+### tally
+data <- read.csv("output_data/04_RB9_CSCI_ASCI_HydroAlt_Synthesis_Summary_Current.csv")
+
+head(data)
+
+
+
+table(data$hydro.alteration.ASCI)
+# Likely Altered Likely Unaltered 
+# 1461              655 
+
+table(data$hydro.alteration.CSCI)
+# Likely Altered Likely Unaltered 
+# 1368              748
+
+table(data$synthesis_alteration)
+
+# High Priority    Low Priority Medium Priority 
+# 1133             420             563 
+
+data_med <- data %>%
+  filter(synthesis_alteration == "Medium Priority")
+
+sum(data_med$hydro.alteration.ASCI == "Likely Altered") # 328
+
+sum(data_med$hydro.alteration.CSCI == "Likely Altered") # 235
+
+
 
 
