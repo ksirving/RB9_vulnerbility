@@ -202,6 +202,8 @@ out.dir <- "figures/"
 # format thresholds
 Year_Tally$Bio_threshold <- as.character(Year_Tally$Bio_threshold)
 
+range(Year_Tally$wayr)
+
 Tally <- Year_Tally %>%
   group_by(CombCode, hydro.endpoint, Biol) %>%
   summarise(AlteredMean = mean(Altered), AlteredMedian = median(Altered)) 
@@ -217,7 +219,7 @@ head(Tally0)
 
 
 csci1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 40, ymax = 60, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Dry Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
@@ -256,7 +258,7 @@ Tally0 <- Year_Tally %>%
 head(Tally0)
 
 csci2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 25, ymax = 75, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Fall Magnitude", x = "Year", y = "Altered Subbasins (%)") + 
@@ -290,7 +292,7 @@ Tally0 <- Year_Tally %>%
 head(Tally)
 
 csci2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 25, ymax = 75, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Dry Season Baseflow High", x = "Year", y = "Altered Subbasins (%)") + 
@@ -325,7 +327,7 @@ Tally0 <- Year_Tally %>%
 head(Tally0)
 
 csci2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 25, ymax = 75, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Wet Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
@@ -372,7 +374,7 @@ head(Tally0)
 
 
 ASCI1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 25, ymax = 75, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Dry Season Baseflow High", x = "Year", y = "Altered Subbasins (%)") + 
@@ -410,7 +412,7 @@ Tally0 <- Year_Tally %>%
 head(Tally0)
 
 ASCI2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 25, ymax = 75, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Fall Magnitude", x = "Year", y = "Altered Subbasins (%)") + 
@@ -445,7 +447,7 @@ head(Tally0)
 
 
 ASCI1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color = Bio_threshold, linetype = Threshold )) +
-  annotate("rect", ymin = 40, ymax = 60, xmin = 1994, xmax = 2018,
+  annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
   labs(title = "Dry Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
@@ -554,18 +556,7 @@ prj <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 suit_data <- delta_dfx_sub %>%
   rename(COMID = comid)
 head(suit_data)
-# dim(suit_data_alt)
-# suit_data_alt <- suit_data %>%
-#   mutate(alteration_50pct_alt = ifelse(Altered == "Altered", "Altered", "Unaltered")) %>%
-#   distinct()
-#   
 
-head(suit_data_50)
-
-#write.csv table of altered metrics per subbasin and bio/threshold
-# write.csv(suit_data_50, file = "output_data/04_altered_metric_per_nhd_reach.csv")
-
-names(suit_data_50)
 # aggregate by site, Biol, Threshold, alteration_50pct_time, get a count of n of altered and unaltered metrics for each
 subset.50pct.time <- suit_data %>% 
   group_by(COMID, Biol, Threshold, Alteration) %>% 
@@ -670,7 +661,7 @@ synthesis.summary.table
 
 
 # Maps --------------------------------------------------------------------
-install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
+# install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
 
 library(spDataLarge)
 library(readxl)
@@ -733,7 +724,7 @@ study <- ggplot(SynthNHD) +
 study
 
 ## subset lookup categories and tables
-lookup.sub <- lookup[lookup$priority %in% unique(nhdplo_sf$synthesis_alteration),]
+lookup.sub <- lookup[lookup$priority %in% unique(nhdplo$synthesis_alteration),]
 
 # save as factor for legend ordering
 lookup.sub$priority <- factor(lookup.sub$priority, levels = unique(lookup.sub$priority))
