@@ -587,7 +587,7 @@ subset.50pct.time <- subset.50pct.time %>%
   distinct()
 
 # save csv in output_data
-file.name <- "output_data/04_summary.50pct.time.altered.2metrics.Current.csv"
+file.name <- "ignore/04_summary.50pct.time.altered.2metrics.Current.csv"
 write.csv(subset.50pct.time, file=file.name, row.names = FALSE)
 
 subset.50pct.time
