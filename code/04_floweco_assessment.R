@@ -917,4 +917,46 @@ sum(data_med$hydro.alteration.CSCI == "Likely Altered") # 235
 
 
 
+# shapefile all alteration ------------------------------------------------
 
+head(separate.summary) ## csci & asci
+head(synthesis.summary) ## synthesized 
+
+## make sep summary wider to form asci/csci columns
+separate.summary <- separate.summary %>%
+  pivot_wider(names_from = Biol, values_from = overall.altered.2metric)
+
+## join alteration together
+
+all_alt <- full_join(separate.summary, synthesis.summary, by = "COMID")
+head(all_alt)
+
+all_alt <- rename(all_alt, ASCI.Alteration = ASCI, CSCI.Alteration = CSCI, Overall.Priority = synthesis_alteration)
+
+## NHD reaches
+
+calinhd <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment - General/Data/SpatialData/NHDplus_RB9.shp') %>%
+  spTransform(prj) %>%
+  st_as_sf %>%
+  st_simplify(dTolerance = 0.5, preserveTopology = T)
+head(calinhd)
+
+# fortified calinhd, joind with delta
+# merge all_alt with basins to get spatial data
+altNHD <- calinhd %>%
+  filter(COMID %in% unique(all_alt$COMID)) %>%
+  dplyr::select(COMID, LENGTHKM) %>% ## 46
+  as('Spatial') %>% 
+  st_as_sf(coords = c("long", "lat"), remove = FALSE)
+
+nhdalt <- altNHD %>%
+  fortify %>%
+  # left_join(comidid, by = 'id') %>%
+  full_join(all_alt, by = 'COMID')
+
+## save as shape
+st_write(nhdalt, "output_data/04_Bio_Alteration_RB9.shp")
+
+nhdalt <- st_read("output_data/04_Bio_Alteration_RB9.shp")
+head(nhdalt)
+plot(nhdalt)
