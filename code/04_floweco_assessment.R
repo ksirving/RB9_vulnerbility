@@ -222,7 +222,7 @@ csci1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Dry Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Dry Season Baseflow", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0, 100)) +
   scale_colour_discrete(name  ="CSCI Theshold") +
@@ -261,7 +261,7 @@ csci2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Fall Magnitude", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Fall Magnitude", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0,100)) +
   scale_colour_discrete(name  ="CSCI Theshold") +
@@ -295,7 +295,7 @@ csci2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Dry Season Baseflow High", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Dry Season Baseflow High", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0,100)) +
   scale_colour_discrete(name  ="CSCI Theshold") +
@@ -330,7 +330,7 @@ csci2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Wet Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Wet Season Baseflow", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0,100)) +
   scale_colour_discrete(name  ="CSCI Theshold") +
@@ -377,7 +377,7 @@ ASCI1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Dry Season Baseflow High", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Dry Season Baseflow High", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0, 100)) +
   scale_colour_discrete(name  ="ASCI Theshold") +
@@ -415,7 +415,7 @@ ASCI2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Fall Magnitude", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Fall Magnitude", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0,100)) +
   scale_colour_discrete(name  ="ASCI Theshold") +
@@ -450,7 +450,7 @@ ASCI1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Dry Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Dry Season Baseflow", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0, 100)) +
   scale_colour_discrete(name  ="ASCI Theshold") +
@@ -489,7 +489,7 @@ ASCI1 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
   annotate("rect", ymin = 25, ymax = 75, xmin = 2000, xmax = 2014,
            alpha = .2) +
   geom_smooth(method = "loess", se = FALSE ) +
-  labs(title = "Wet Season Baseflow", x = "Year", y = "Altered Subbasins (%)") + 
+  labs(title = "Wet Season Baseflow", x = "Year", y = "Altered Reaches (%)") + 
   theme(text = element_text(size=10)) +
   scale_y_continuous(limits = c(0, 100)) +
   scale_colour_discrete(name  ="ASCI Theshold") +
@@ -635,7 +635,7 @@ separate.summary <- subset.50pct.time %>%
 site.length <- length(unique(subset.50pct.time$COMID))
 site.length
 
-##### something is wrong here!!!!!
+
 # summarize (count and %) of total subbasin in overall alteration categories
 subset.50pct.time.summary2 <- subset.50pct.time %>% 
   group_by(Biol, Threshold, overall.altered.2metric) %>% 
@@ -750,7 +750,7 @@ lookup <- data.frame(cbind(colors, priority, categories))
 # Set up base map 
 
 study <- ggplot(SynthNHD) + 
-  labs(title="Current Condition", subtitle = "Based on Biologically-Relevant Flow Alteration",x ="", y = "")  + 
+  labs(title=" Synthesized Biologic Flow Alteration",x ="", y = "")  + 
   geom_sf(color = "lightgrey", fill="white") +
   annotation_scale() +
   annotation_north_arrow(pad_y = unit(0.9, "cm"),  height = unit(.8, "cm"),
@@ -772,7 +772,7 @@ nhdplo$synthesis_alteration <- factor(nhdplo$synthesis_alteration, levels = uniq
 
 # synthesis map for bio index z
 syn.plot <- study + geom_sf(data = nhdplo, aes(color=synthesis_alteration, geometry = geometry)) +
-  scale_color_manual(name = "Condition based on Biologic Flow Alteration", labels = lookup.sub$categories, values=lookup.sub$colors) 
+  scale_color_manual(name = "Alteration based on Biologic Flow Alteration", labels = lookup.sub$categories, values=lookup.sub$colors) 
 
 # print map
 print(syn.plot)
@@ -916,11 +916,16 @@ sum(data_med$hydro.alteration.ASCI == "Likely Altered") # 328
 sum(data_med$hydro.alteration.CSCI == "Likely Altered") # 235
 
 
-
 # shapefile all alteration ------------------------------------------------
 
 head(separate.summary) ## csci & asci
-head(synthesis.summary) ## synthesized 
+head(synthesis.summary) ## synthesized
+
+sum(separate.summary$ASCI == "Altered") ## 1461
+sum(separate.summary$CSCI == "Altered") ## 1368
+dim(separate.summary) ## 2116
+
+(sum(separate.summary$ASCI == "Altered")/2116)*100
 
 ## make sep summary wider to form asci/csci columns
 separate.summary <- separate.summary %>%
