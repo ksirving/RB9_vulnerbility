@@ -305,6 +305,7 @@ csci2 <- ggplot(data=Tally0, aes(x = wayr, y= Altered, group = CombCode, color =
 
 csci2
 
+
 out.filename <- paste0(out.dir,"CSCI_DS_Mag90_Alt_over_time.jpg")
 ggsave(csci2, file = out.filename, dpi=300, height=4, width=6)
 
@@ -354,7 +355,7 @@ unique(Tally0x$CombCode)
 
 # CombCode         AlteredMean AlteredMedian
 # <chr>                  <dbl>         <dbl>
-#   1 0.63_Threshold25        40.5          37.2
+# 1 0.63_Threshold25        40.5          37.2
 # 2 0.63_Threshold50        48.0          45.0
 # 3 0.63_Threshold75        56.4          52.8
 # 4 0.79_Threshold25        40.9          37.3
@@ -718,6 +719,7 @@ calinhd <- readOGR('/Users/katieirving/SCCWRP/SD Hydro Vulnerability Assessment 
   spTransform(prj) %>%
   st_as_sf %>%
   st_simplify(dTolerance = 0.5, preserveTopology = T)
+
 unique(calinhd$COMID)
 unique(overall.summary$COMID)
 
